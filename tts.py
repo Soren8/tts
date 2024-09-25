@@ -1,5 +1,6 @@
 import torch
-from transformers import AutoProcessor, AutoModelForTextToWaveform
+from parler_tts import ParlerTTSForConditionalGeneration
+from transformers import AutoTokenizer
 import scipy.io.wavfile as wavfile
 import numpy as np
 import sounddevice as sd
@@ -8,10 +9,13 @@ import sounddevice as sd
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Load the model and processor
+# Load the model and tokenizer
 model_name = "parler-tts/parler-tts-mini-v1"
-processor = AutoProcessor.from_pretrained(model_name)
-model = AutoModelForTextToWaveform.from_pretrained(model_name).to(device)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = ParlerTTSForConditionalGeneration.from_pretrained(model_name).to(device)
+
+# Default description
+description = "A female speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
 
 while True:
     # Text to synthesize
@@ -21,20 +25,21 @@ while True:
         break
 
     # Prepare the input
-    inputs = processor(text=text, return_tensors="pt").to(device)
+    input_ids = tokenizer(description, return_tensors="pt").input_ids.to(device)
+    prompt_input_ids = tokenizer(text, return_tensors="pt").input_ids.to(device)
 
     # Generate the audio
     with torch.no_grad():
-        output = model.generate(**inputs)
+        generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
 
     # Get the audio data
-    audio = output.audio.cpu().numpy().squeeze()
+    audio = generation.cpu().numpy().squeeze()
 
     # Normalize the audio
     audio = audio / np.max(np.abs(audio))
 
     # Get the sample rate
-    sample_rate = model.config.sample_rate
+    sample_rate = model.config.sampling_rate
 
     # Play the audio
     print("Playing audio...")
