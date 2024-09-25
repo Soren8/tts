@@ -4,18 +4,19 @@ from transformers import AutoTokenizer
 import scipy.io.wavfile as wavfile
 import numpy as np
 import sounddevice as sd
+import soundfile as sf
 
 # Check for CUDA availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Load the model and tokenizer
-model_name = "parler-tts/parler-tts-mini-v1"
+model_name = "parler-tts/parler-tts-mini-jenny-30H"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = ParlerTTSForConditionalGeneration.from_pretrained(model_name).to(device)
 
 # Default description
-description = "A female speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
+description = "Jenny delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
 
 while True:
     # Text to synthesize
@@ -29,26 +30,20 @@ while True:
     prompt_input_ids = tokenizer(text, return_tensors="pt").input_ids.to(device)
 
     # Generate the audio
-    with torch.no_grad():
-        generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
-
-    # Get the audio data
+    generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
     audio = generation.cpu().numpy().squeeze()
 
     # Normalize the audio
     audio = audio / np.max(np.abs(audio))
 
-    # Get the sample rate
-    sample_rate = model.config.sampling_rate
-
     # Play the audio
     print("Playing audio...")
-    sd.play(audio, sample_rate)
+    sd.play(audio, model.config.sampling_rate)
     sd.wait()  # Wait until the audio is finished playing
 
     # Optionally, save the audio file
-    wavfile.write("output.wav", sample_rate, (audio * 32767).astype(np.int16))
-    print("Audio file 'output.wav' has been generated.")
+    #sf.write("output.wav", audio, model.config.sampling_rate)
+    #print("Audio file 'output.wav' has been generated.")
 
     # Print CUDA memory usage if available
     if torch.cuda.is_available():
