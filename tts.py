@@ -14,10 +14,10 @@ processor = AutoProcessor.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name).to(device)
 
 # Text to synthesize
-text = "Hello, this is a test of the Bark small text-to-speech model."
+text = input("Enter the text you want to convert to speech: ")
 
 # Prepare the input
-inputs = processor(text, voice_preset="v2/en_speaker_3", return_tensors="pt").to(device)
+inputs = processor(text, voice_preset="v2/en_speaker_9", return_tensors="pt").to(device)
 
 # Generate the audio
 with torch.no_grad():
