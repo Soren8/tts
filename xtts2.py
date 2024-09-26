@@ -3,6 +3,8 @@ from TTS.api import TTS
 import sounddevice as sd
 import numpy as np
 import re
+import threading
+import queue
 
 # Get device
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -18,6 +20,22 @@ def split_into_sentences(text):
     # Simple sentence splitting. You might want to use a more sophisticated method.
     return re.split('(?<=[.!?]) +', text)
 
+def tts_generator(sentences, audio_queue):
+    for sentence in sentences:
+        if sentence.strip():  # Skip empty sentences
+            wav = tts.tts(sentence, speaker_wav="jenny.wav", language="en")
+            audio = np.array(wav)
+            audio_queue.put(audio)
+    audio_queue.put(None)  # Signal that generation is complete
+
+def audio_player(audio_queue):
+    while True:
+        audio = audio_queue.get()
+        if audio is None:
+            break
+        sd.play(audio, samplerate=sample_rate)
+        sd.wait()  # Wait until this sentence's audio is finished playing
+
 while True:
     filename = input("Enter the filename containing the text to convert to speech (or 'quit' to exit): ")
     
@@ -32,17 +50,20 @@ while True:
         print(text)
 
         sentences = split_into_sentences(text)
-        
+
         print("Generating and playing audio...")
-        for sentence in sentences:
-            if sentence.strip():  # Skip empty sentences
-                wav = tts.tts(sentence, speaker_wav="jenny.wav", language="en")
-                audio = np.array(wav)
-                
-                # Play the audio for this sentence
-                sd.play(audio, samplerate=sample_rate)
-                sd.wait()  # Wait until this sentence's audio is finished playing
-        
+
+        audio_queue = queue.Queue()
+
+        tts_thread = threading.Thread(target=tts_generator, args=(sentences, audio_queue))
+        audio_thread = threading.Thread(target=audio_player, args=(audio_queue,))
+
+        tts_thread.start()
+        audio_thread.start()
+
+        tts_thread.join()
+        audio_thread.join()
+
         print("Audio playback complete.")
 
     except FileNotFoundError:
