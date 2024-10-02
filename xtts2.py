@@ -6,6 +6,7 @@ import re
 import threading
 import queue
 import wave
+import os
 
 # Get device
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -24,7 +25,7 @@ def split_into_sentences(text):
 def tts_generator(sentences, audio_queue, audio_segments):
     for sentence in sentences:
         if sentence.strip():  # Skip empty sentences
-            wav = tts.tts(sentence, speaker_wav="jenny.wav", language="en")
+            wav = tts.tts(sentence, speaker_wav="voices/chris.wav", language="en")
             audio = np.array(wav)
             audio_queue.put(audio)
             audio_segments.append(audio)  # Collect audio for saving
@@ -38,7 +39,7 @@ def audio_player(audio_queue):
         sd.play(audio, samplerate=sample_rate)
         sd.wait()  # Wait until this sentence's audio is finished playing
 
-def save_audio(audio_segments, filename="output.wav"):
+def save_audio(audio_segments, filename):
     # Concatenate all audio segments
     if not audio_segments:
         print("No audio segments to save.")
@@ -66,6 +67,8 @@ while True:
     
     if filename.lower() == 'quit':
         break
+    if not os.path.isabs(filename) and not filename.startswith('text/'):
+        filename = f"text/{filename}"
     
     try:
         with open(filename, 'r', encoding='utf-8') as file:
@@ -92,9 +95,9 @@ while True:
 
         print("Audio playback complete.")
 
-        # Save all audio to output.wav
-        save_audio(audio_segments, filename="output.wav")
-
+        # Save all audio
+        outfilename = f"outputs/{os.path.splitext(os.path.basename(filename))[0]}.wav"
+        save_audio(audio_segments, filename=outfilename)
     except FileNotFoundError:
         print(f"Error: File '{filename}' not found. Please try again.")
     except Exception as e:
