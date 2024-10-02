@@ -1,2 +1,4 @@
 *.wav
-text.txt
+text/*
+outputs/*
+voices/*
