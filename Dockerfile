@@ -10,8 +10,12 @@ RUN apt-get update && apt-get install -y libportaudio2 && rm -rf /var/lib/apt/li
 # Copy the requirements file into the container
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Create a directory for pip cache
+RUN mkdir -p /root/.cache/pip
+
+# Install Python dependencies with pip cache
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
 COPY . .
