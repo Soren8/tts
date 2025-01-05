@@ -7,3 +7,4 @@ numpy==1.22.0  # Explicitly set to 1.22.0 to match TTS requirements
 Flask>=2.3.2
 Flask-Cors>=4.0.0
 requests>=2.31.0
+sounddevice>=0.4.6

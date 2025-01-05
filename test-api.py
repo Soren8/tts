@@ -1,6 +1,10 @@
 import requests
 import json
 import sys
+import sounddevice as sd
+import numpy as np
+import wave
+import io
 
 # Define the API base URL
 base_url = "http://localhost:5000"
@@ -43,11 +47,24 @@ def test_api():
             audio_response = requests.get(f"{base_url}/api/audio/{response_data['file']}")
             audio_response.raise_for_status()
             
-            # Save the audio file
-            output_filename = "output.wav"
-            with open(output_filename, "wb") as f:
-                f.write(audio_response.content)
-            print(f"Audio file saved as '{output_filename}'")
+            # Play the audio directly
+            wav_file = io.BytesIO(audio_response.content)
+            with wave.open(wav_file, 'rb') as wf:
+                # Get audio parameters
+                channels = wf.getnchannels()
+                sample_width = wf.getsampwidth()
+                sample_rate = wf.getframerate()
+                
+                # Read the audio data
+                audio_data = wf.readframes(wf.getnframes())
+                
+                # Convert to numpy array
+                audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                
+                # Play the audio
+                print("Playing audio...")
+                sd.play(audio_array, sample_rate)
+                sd.wait()  # Wait until audio finishes playing
         except requests.exceptions.RequestException as e:
             print(f"Error downloading audio file: {e}")
             sys.exit(1)
