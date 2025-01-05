@@ -20,7 +20,7 @@ def test_api():
     # Test the /api/tts endpoint
     print("\nTesting /api/tts endpoint...")
     tts_payload = {
-        "text": "Hello, this is a test of the text-to-speech API. How are you today?",
+        "text": "Hello, this is a test sentence.",
         "voice_file": "voices/default.wav"
     }
     try:
