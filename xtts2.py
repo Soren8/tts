@@ -1,6 +1,7 @@
 import torch
 from TTS.api import TTS
 from TTS.utils.manage import ModelManager
+from dotenv import load_dotenv
 
 # Pre-download the model and accept the license
 ModelManager().download_model("tts_models/multilingual/multi-dataset/xtts_v2")
@@ -101,10 +102,16 @@ def status():
     return jsonify({"status": "running", "device": device}), 200
 
 if __name__ == '__main__':
+    # Load environment variables
+    load_dotenv()
+    
     # Create necessary directories if they don't exist
     os.makedirs('outputs', exist_ok=True)
     os.makedirs('voices', exist_ok=True)
     os.makedirs('text', exist_ok=True)
 
-    # Run the Flask app
-    app.run(host='0.0.0.0', port=5000)
+    # Get port from environment variable, default to 5000 if not set
+    port = int(os.getenv('PORT', 5000))
+
+    # Run the Flask app 
+    app.run(host='0.0.0.0', port=port)
