@@ -15,12 +15,21 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Get device
+# Get device and print diagnostic information
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"CUDA device count: {torch.cuda.device_count()}")
+    print(f"CUDA device name: {torch.cuda.get_device_name(0)}")
 
-# Init TTS
-tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+# Init TTS with explicit device handling
+tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+if torch.cuda.is_available():
+    tts = tts.to("cuda")
+else:
+    print("WARNING: CUDA not available, using CPU")
+    tts = tts.to("cpu")
 
 # Set up audio stream
 sample_rate = tts.synthesizer.output_sample_rate
