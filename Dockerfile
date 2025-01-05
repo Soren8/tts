@@ -18,7 +18,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
 
 # Patch the TTS library to automatically accept the license
-RUN sed -i 's/def ask_tos(self, output_path):/def ask_tos(self, output_path):\n        return True/' /usr/local/lib/python3.9/site-packages/TTS/utils/manage.py
+RUN sed -i 's/def ask_tos(self, output_path):/def ask_tos(self, output_path):\n        print("Automatically accepting Coqui Public Model License (CPML)")\n        return True/' /usr/local/lib/python3.9/site-packages/TTS/utils/manage.py
+
+# Verify the patch was applied
+RUN cat /usr/local/lib/python3.9/site-packages/TTS/utils/manage.py | grep -A 2 "def ask_tos"
 
 # Pre-download the TTS model
 RUN python -c "from TTS.utils.manage import ModelManager; ModelManager().download_model('tts_models/multilingual/multi-dataset/xtts_v2')"
