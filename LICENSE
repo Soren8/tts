@@ -1,3 +1,12 @@
+This repository contains components under two licenses:
+
+1. The software code in this repository is licensed under the Apache License 2.0
+2. The XTTS v2 model used by this software is licensed under the Coqui Public Model License (CPML) 1.0.0
+
+-------------------------------------------------------------------------------
+                    APACHE LICENSE 2.0 (Software License)
+-------------------------------------------------------------------------------
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -174,27 +183,33 @@
 
    END OF TERMS AND CONDITIONS
 
-   APPENDIX: How to apply the Apache License to your work.
+-------------------------------------------------------------------------------
+                COQUI PUBLIC MODEL LICENSE 1.0.0 (Model License)
+-------------------------------------------------------------------------------
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+The XTTS v2 model used by this software is subject to the Coqui Public Model 
+License 1.0.0 (https://coqui.ai/cpml)
 
-   Copyright [2025] [Your Name or Organization]
+The complete CPML 1.0.0 license can be found at: https://coqui.ai/cpml
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Key points of the CPML 1.0.0:
+- Non-commercial use only
+- Attribution required
+- No warranty or liability
+- Cannot be used to train other models without permission
+- Must respect privacy and data protection laws
 
-       http://www.apache.org/licenses/LICENSE-2.0
+-------------------------------------------------------------------------------
+                            LICENSE COMPATIBILITY
+-------------------------------------------------------------------------------
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+The Apache 2.0 license applies to all software code in this repository. The use
+of the XTTS v2 model is governed by the CPML 1.0.0. These licenses are 
+complementary and non-conflicting as they apply to different components:
+
+- All original software code: Apache 2.0
+- XTTS v2 model and its outputs: CPML 1.0.0
+
+Users must comply with both licenses for their respective components. In 
+particular, note that the CPML restricts usage of the XTTS v2 model to 
+non-commercial purposes only.
