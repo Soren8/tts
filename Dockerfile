@@ -17,6 +17,9 @@ RUN mkdir -p /root/.cache/pip
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
 
+# Pre-download the TTS model and accept the license
+RUN python -c "from TTS.utils.manage import ModelManager; ModelManager().download_model('tts_models/multilingual/multi-dataset/xtts_v2')"
+
 # Copy the rest of the application code
 COPY . .
 

@@ -1,5 +1,9 @@
 import torch
 from TTS.api import TTS
+from TTS.utils.manage import ModelManager
+
+# Pre-download the model and accept the license
+ModelManager().download_model("tts_models/multilingual/multi-dataset/xtts_v2")
 import sounddevice as sd
 import numpy as np
 import re
