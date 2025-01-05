@@ -2,8 +2,8 @@
 torch==2.1.1+cu118
 torchaudio==2.1.1+cu118
 torchvision==0.16.1+cu118
-TTS==0.17.6
-numpy==1.24.3  # Updated to match TTS 0.17.6 requirements
+TTS==0.22.0  # Updated to latest version
+numpy>=1.24.3  # Loosened to let TTS pick compatible version
 Flask>=2.3.2
 Flask-Cors>=4.0.0
 requests>=2.31.0
