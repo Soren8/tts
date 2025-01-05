@@ -22,10 +22,10 @@ def split_into_sentences(text):
     # Simple sentence splitting. You might want to use a more sophisticated method.
     return re.split('(?<=[.!?]) +', text)
 
-def tts_generator(sentences, audio_queue, audio_segments):
+def tts_generator(sentences, audio_queue, audio_segments, voice_file):
     for sentence in sentences:
         if sentence.strip():  # Skip empty sentences
-            wav = tts.tts(sentence, speaker_wav="voices/chris.wav", language="en")
+            wav = tts.tts(sentence, speaker_wav=voice_file, language="en")
             audio = np.array(wav)
             audio_queue.put(audio)
             audio_segments.append(audio)  # Collect audio for saving
@@ -70,6 +70,12 @@ while True:
     if not os.path.isabs(filename) and not filename.startswith('text/'):
         filename = f"text/{filename}"
     
+    voice_file = input("Enter the voice file to use (or press Enter for default 'voices/chris.wav'): ")
+    if not voice_file:
+        voice_file = "voices/chris.wav"
+    elif not os.path.isabs(voice_file) and not voice_file.startswith('voices/'):
+        voice_file = f"voices/{voice_file}"
+    
     try:
         with open(filename, 'r', encoding='utf-8') as file:
             text = file.read()
@@ -84,7 +90,7 @@ while True:
         audio_queue = queue.Queue()
         audio_segments = []  # List to collect audio segments
 
-        tts_thread = threading.Thread(target=tts_generator, args=(sentences, audio_queue, audio_segments))
+        tts_thread = threading.Thread(target=tts_generator, args=(sentences, audio_queue, audio_segments, voice_file))
         audio_thread = threading.Thread(target=audio_player, args=(audio_queue,))
 
         tts_thread.start()
