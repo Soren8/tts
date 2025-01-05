@@ -4,11 +4,8 @@ from TTS.utils.manage import ModelManager
 
 # Pre-download the model and accept the license
 ModelManager().download_model("tts_models/multilingual/multi-dataset/xtts_v2")
-import sounddevice as sd
 import numpy as np
 import re
-import threading
-import queue
 import wave
 import os
 from flask import Flask, request, jsonify, send_file
@@ -32,22 +29,12 @@ def split_into_sentences(text):
     # Simple sentence splitting
     return re.split('(?<=[.!?]) +', text)
 
-def tts_generator(sentences, audio_queue, audio_segments, voice_file):
+def tts_generator(sentences, audio_segments, voice_file):
     for sentence in sentences:
         if sentence.strip():  # Skip empty sentences
             wav = tts.tts(sentence, speaker_wav=voice_file, language="en")
             audio = np.array(wav)
-            audio_queue.put(audio)
             audio_segments.append(audio)  # Collect audio for saving
-    audio_queue.put(None)  # Signal that generation is complete
-
-def audio_player(audio_queue):
-    while True:
-        audio = audio_queue.get()
-        if audio is None:
-            break
-        sd.play(audio, samplerate=sample_rate)
-        sd.wait()  # Wait until this sentence's audio is finished playing
 
 def save_audio(audio_segments, filename):
     # Concatenate all audio segments
@@ -82,22 +69,14 @@ def text_to_speech():
         return jsonify({"error": "Text is required"}), 400
 
     sentences = split_into_sentences(text)
-
-    audio_queue = queue.Queue()
     audio_segments = []  # List to collect audio segments
 
-    tts_thread = threading.Thread(target=tts_generator, args=(sentences, audio_queue, audio_segments, voice_file))
-    audio_thread = threading.Thread(target=audio_player, args=(audio_queue,))
-
-    tts_thread.start()
-    audio_thread.start()
-
-    tts_thread.join()
-    audio_thread.join()
+    # Generate audio without playback
+    tts_generator(sentences, audio_segments, voice_file)
 
     # Save the audio to a file
-    output_filename = f"outputs/output_{len(os.listdir('outputs')) + 1}.wav"
-    save_audio(audio_segments, output_filename)
+    output_filename = f"output_{len(os.listdir('outputs')) + 1}.wav"
+    save_audio(audio_segments, os.path.join('outputs', output_filename))
 
     return jsonify({"message": "Audio generated successfully", "file": output_filename}), 200
 
