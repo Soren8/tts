@@ -63,16 +63,18 @@ def save_audio(audio_segments, filename):
     print(f"All audio saved to {filename}")
 
 while True:
-    filename = input("Enter the filename containing the text to convert to speech (or 'quit' to exit): ")
+    filename = input("Enter the filename containing the text to convert to speech (or press Enter for 'text/default.txt'): ")
     
     if filename.lower() == 'quit':
         break
-    if not os.path.isabs(filename) and not filename.startswith('text/'):
+    if not filename:
+        filename = "text/default.txt"
+    elif not os.path.isabs(filename) and not filename.startswith('text/'):
         filename = f"text/{filename}"
     
-    voice_file = input("Enter the voice file to use (or press Enter for default 'voices/chris.wav'): ")
+    voice_file = input("Enter the voice file to use (or press Enter for default 'voices/default.wav'): ")
     if not voice_file:
-        voice_file = "voices/chris.wav"
+        voice_file = "voices/default.wav"
     elif not os.path.isabs(voice_file) and not voice_file.startswith('voices/'):
         voice_file = f"voices/{voice_file}"
     
