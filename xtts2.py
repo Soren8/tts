@@ -7,6 +7,12 @@ import threading
 import queue
 import wave
 import os
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+
+# Initialize Flask app
+app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Get device
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -19,7 +25,7 @@ tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 sample_rate = tts.synthesizer.output_sample_rate
 
 def split_into_sentences(text):
-    # Simple sentence splitting. You might want to use a more sophisticated method.
+    # Simple sentence splitting
     return re.split('(?<=[.!?]) +', text)
 
 def tts_generator(sentences, audio_queue, audio_segments, voice_file):
@@ -62,53 +68,51 @@ def save_audio(audio_segments, filename):
         wf.writeframes(concatenated_audio.tobytes())
     print(f"All audio saved to {filename}")
 
-while True:
-    filename = input("Enter the filename containing the text to convert to speech (or press Enter for 'text/default.txt'): ")
-    
-    if filename.lower() == 'quit':
-        break
-    if not filename:
-        filename = "text/default.txt"
-    elif not os.path.isabs(filename) and not filename.startswith('text/'):
-        filename = f"text/{filename}"
-    
-    voice_file = input("Enter the voice file to use (or press Enter for default 'voices/default.wav'): ")
-    if not voice_file:
-        voice_file = "voices/default.wav"
-    elif not os.path.isabs(voice_file) and not voice_file.startswith('voices/'):
-        voice_file = f"voices/{voice_file}"
-    
-    try:
-        with open(filename, 'r', encoding='utf-8') as file:
-            text = file.read()
-        
-        print(f"Text read from {filename}:")
-        print(text)
+@app.route('/api/tts', methods=['POST'])
+def text_to_speech():
+    data = request.json
+    text = data.get('text')
+    voice_file = data.get('voice_file', 'voices/default.wav')
 
-        sentences = split_into_sentences(text)
+    if not text:
+        return jsonify({"error": "Text is required"}), 400
 
-        print("Generating and playing audio...")
+    sentences = split_into_sentences(text)
 
-        audio_queue = queue.Queue()
-        audio_segments = []  # List to collect audio segments
+    audio_queue = queue.Queue()
+    audio_segments = []  # List to collect audio segments
 
-        tts_thread = threading.Thread(target=tts_generator, args=(sentences, audio_queue, audio_segments, voice_file))
-        audio_thread = threading.Thread(target=audio_player, args=(audio_queue,))
+    tts_thread = threading.Thread(target=tts_generator, args=(sentences, audio_queue, audio_segments, voice_file))
+    audio_thread = threading.Thread(target=audio_player, args=(audio_queue,))
 
-        tts_thread.start()
-        audio_thread.start()
+    tts_thread.start()
+    audio_thread.start()
 
-        tts_thread.join()
-        audio_thread.join()
+    tts_thread.join()
+    audio_thread.join()
 
-        print("Audio playback complete.")
+    # Save the audio to a file
+    output_filename = f"outputs/output_{len(os.listdir('outputs')) + 1}.wav"
+    save_audio(audio_segments, output_filename)
 
-        # Save all audio
-        outfilename = f"outputs/{os.path.splitext(os.path.basename(filename))[0]}.wav"
-        save_audio(audio_segments, filename=outfilename)
-    except FileNotFoundError:
-        print(f"Error: File '{filename}' not found. Please try again.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    return jsonify({"message": "Audio generated successfully", "file": output_filename}), 200
 
-print("Program ended.")
+@app.route('/api/audio/<filename>', methods=['GET'])
+def get_audio(filename):
+    file_path = os.path.join('outputs', filename)
+    if not os.path.exists(file_path):
+        return jsonify({"error": "File not found"}), 404
+    return send_file(file_path, mimetype='audio/wav')
+
+@app.route('/api/status', methods=['GET'])
+def status():
+    return jsonify({"status": "running", "device": device}), 200
+
+if __name__ == '__main__':
+    # Create necessary directories if they don't exist
+    os.makedirs('outputs', exist_ok=True)
+    os.makedirs('voices', exist_ok=True)
+    os.makedirs('text', exist_ok=True)
+
+    # Run the Flask app
+    app.run(host='0.0.0.0', port=5000)
