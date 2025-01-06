@@ -33,8 +33,11 @@ function Write-Log-Safe {
 
 # Check for existing TTS service
 Write-Log-Safe "Checking for existing TTS service..."
-$processes = Get-WmiObject Win32_Process -Filter "name = 'pythonw.exe'" | 
-    Where-Object { $_.CommandLine -like '*xtts2.py*' }
+$processes = Get-CimInstance Win32_Process | 
+    Where-Object { 
+        $_.Name -eq 'pythonw.exe' -and 
+        $_.CommandLine -match 'xtts2\.py'
+    }
 
 if ($processes) {
     foreach ($process in $processes) {
