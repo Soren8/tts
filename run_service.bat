@@ -1,4 +1,12 @@
 @echo off
+setlocal EnableDelayedExpansion
+
+REM Load environment variables from .env
+for /f "tokens=1,* delims==" %%a in (.env) do (
+    set %%a=%%b
+)
+
+cd /d "%INSTALL_PATH%"
 echo Starting TTS Service Setup...
 
 REM Check if Python is installed
@@ -27,7 +35,7 @@ pip install -r requirements.txt
 
 REM Run the service
 echo Starting TTS service...
-python xtts2.py
+pythonw xtts2.py
 
 REM Keep window open if there's an error
 if errorlevel 1 pause
