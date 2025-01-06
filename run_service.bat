@@ -42,7 +42,7 @@ pip install -r requirements.txt >> "%INSTALL_PATH%\service.log" 2>&1
 
 REM Run the service
 echo Starting TTS service... >> "%INSTALL_PATH%\service.log" 2>&1
-pythonw xtts2.py >> "%INSTALL_PATH%\service.log" 2>&1
+start /B pythonw xtts2.py
 
 REM Log any errors
 if errorlevel 1 (
