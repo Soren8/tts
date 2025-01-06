@@ -33,8 +33,11 @@ function Write-Log-Safe {
 
 # Check for existing TTS service
 Write-Log-Safe "Checking for existing TTS service..."
-$processes = Get-Process pythonw -ErrorAction SilentlyContinue | 
-    Where-Object { $_.MainWindowTitle -match "xtts2.py" }
+$processes = Get-Process python -ErrorAction SilentlyContinue | 
+    Where-Object { 
+        $_.ProcessName -eq "python" -and 
+        $_.Modules.FileName -match "xtts2.py"
+    }
 
 if ($processes) {
     foreach ($process in $processes) {
