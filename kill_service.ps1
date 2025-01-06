@@ -33,18 +33,15 @@ function Write-Log-Safe {
 
 # Check for existing TTS service
 Write-Log-Safe "Checking for existing TTS service..."
-$processes = Get-Process pythonw -ErrorAction SilentlyContinue | 
-    Where-Object { 
-        $_.ProcessName -eq "pythonw" -and 
-        $_.Modules.FileName -match "xtts2.py"
-    }
+$processes = Get-WmiObject Win32_Process -Filter "name = 'pythonw.exe'" | 
+    Where-Object { $_.CommandLine -like '*xtts2.py*' }
 
 if ($processes) {
     foreach ($process in $processes) {
-        Write-Log-Safe "Stopping existing TTS service PID: $($process.Id)"
-        Stop-Process -Id $process.Id -Force
+        Write-Log-Safe "Stopping existing TTS service PID: $($process.ProcessId)"
+        Stop-Process -Id $process.ProcessId -Force
         # Wait for process to terminate
-        while (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
+        while (Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue) {
             Start-Sleep -Seconds 1
         }
     }
