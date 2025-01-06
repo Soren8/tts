@@ -19,14 +19,28 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Set up logging
-log_file = 'service.log'
-logging.basicConfig(
-    handlers=[RotatingFileHandler(log_file, maxBytes=10485760, backupCount=5)],
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'service.log')
+try:
+    logging.basicConfig(
+        handlers=[RotatingFileHandler(log_file, maxBytes=10485760, backupCount=5, delay=True)],
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    logger = logging.getLogger(__name__)
+except PermissionError:
+    # Fallback to a unique log file if the main one is locked
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    fallback_log = os.path.join(temp_dir, f'tts_service_{os.getpid()}.log')
+    logging.basicConfig(
+        handlers=[RotatingFileHandler(fallback_log, maxBytes=10485760, backupCount=5)],
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Could not write to {log_file}, using fallback log file: {fallback_log}")
 
 @app.after_request
 def after_request(response):
