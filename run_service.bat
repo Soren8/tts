@@ -1,6 +1,15 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+REM Check for admin privileges
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo This script requires administrator privileges.
+    echo Please run as administrator.
+    pause
+    exit /b 1
+)
+
 REM Load environment variables from .env
 for /f "tokens=1,* delims==" %%a in (.env) do (
     set %%a=%%b
@@ -10,18 +19,31 @@ cd /d "%INSTALL_PATH%"
 
 REM Check for existing pythonw process running xtts2.py and kill it
 echo Checking for existing TTS service...
-for /f "tokens=2" %%a in ('tasklist /fi "imagename eq pythonw.exe" /v /fo list ^| findstr /i "xtts2.py"') do (
+for /f "tokens=2" %%a in ('wmic process where "commandline like '%%xtts2.py%%' and name like '%%pythonw.exe%%'" get processid ^| findstr /r "[0-9]"') do (
     echo Killing existing TTS service PID: %%a
     taskkill /F /PID %%a
+    REM Wait for process to terminate
+    :waitloop1
+    tasklist | find "%%a" >nul
+    if not errorlevel 1 (
+        timeout /t 1 /nobreak >nul
+        goto :waitloop1
+    )
 )
 
-REM Wait for process to fully terminate and release files
-timeout /t 3 /nobreak > nul
-
-REM Try to delete any existing .log.lock file
-if exist "%INSTALL_PATH%\service.log.lock" (
-    del /F "%INSTALL_PATH%\service.log.lock" 2>nul
+REM Wait and retry for service.log to become available
+:waitforlog
+if exist "%INSTALL_PATH%\service.log" (
+    2>nul (
+        >>"%INSTALL_PATH%\service.log" echo test
+    ) && (
+        goto :logready
+    ) || (
+        timeout /t 1 /nobreak >nul
+        goto :waitforlog
+    )
 )
+:logready
 
 REM Check if Python is installed
 python --version >> "%INSTALL_PATH%\service.log" 2>&1
@@ -46,8 +68,7 @@ REM Install requirements
 echo Installing requirements... >> "%INSTALL_PATH%\service.log" 2>&1
 pip install -r requirements.txt >> "%INSTALL_PATH%\service.log" 2>&1
 
-REM Run the service
-echo Starting TTS service... >> "%INSTALL_PATH%\service.log" 2>&1
+REM Start the service without waiting
 start /B pythonw xtts2.py
 
 REM Log any errors
@@ -55,5 +76,5 @@ if errorlevel 1 (
     echo Service failed to start with error code %errorlevel% >> "%INSTALL_PATH%\service.log" 2>&1
 )
 
-REM Deactivate venv (this line won't be reached while service is running)
-deactivate
+REM No need to deactivate since we're using start /B
+endlocal
