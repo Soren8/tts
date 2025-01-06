@@ -21,7 +21,7 @@ CORS(app)  # Enable CORS for all routes
 # Set up logging
 log_file = 'service.log'
 logging.basicConfig(
-    handlers=[RotatingFileHandler(log_file, maxBytes=100000, backupCount=5)],
+    handlers=[RotatingFileHandler(log_file, maxBytes=10485760, backupCount=5)],
     level=logging.INFO,
     format='%(asctime)s %(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
