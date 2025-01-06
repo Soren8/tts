@@ -19,12 +19,13 @@ cd /d "%INSTALL_PATH%"
 
 REM Check for existing pythonw process running xtts2.py and kill it
 echo Checking for existing TTS service...
-for /f "tokens=2" %%a in ('tasklist /fi "imagename eq pythonw.exe" /v /fo csv ^| find "xtts2.py"') do (
-    echo Killing existing TTS service PID: %%a
-    taskkill /F /PID %%a
+for /f "tokens=2" %%a in ('tasklist /fi "imagename eq pythonw.exe" /nh /fo csv ^| findstr /i "xtts2.py"') do (
+    set pid=%%~a
+    echo Killing existing TTS service PID: !pid!
+    taskkill /F /PID !pid!
     REM Wait for process to terminate
     :waitloop1
-    tasklist | find "%%a" >nul
+    tasklist /fi "PID eq !pid!" | find "pythonw.exe" >nul
     if not errorlevel 1 (
         timeout /t 1 /nobreak >nul
         goto :waitloop1
