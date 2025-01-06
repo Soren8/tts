@@ -1,5 +1,3 @@
-@echo off
-setlocal EnableDelayedExpansion
 
 REM Check for admin privileges
 net session >nul 2>&1
