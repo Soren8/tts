@@ -9,6 +9,14 @@ for /f "tokens=1,* delims==" %%a in (.env) do (
 cd /d "%INSTALL_PATH%"
 echo Starting TTS Service Setup... >> "%INSTALL_PATH%\service.log" 2>&1
 
+REM Check for existing pythonw process running xtts2.py and kill it
+echo Checking for existing TTS service... >> "%INSTALL_PATH%\service.log" 2>&1
+for /f "tokens=2" %%a in ('tasklist /fi "imagename eq pythonw.exe" /v /fo list ^| findstr /i "xtts2.py"') do (
+    echo Killing existing TTS service PID: %%a >> "%INSTALL_PATH%\service.log" 2>&1
+    taskkill /F /PID %%a >> "%INSTALL_PATH%\service.log" 2>&1
+)
+timeout /t 2 /nobreak > nul
+
 REM Check if Python is installed
 python --version >> "%INSTALL_PATH%\service.log" 2>&1
 if errorlevel 1 (
