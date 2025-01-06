@@ -2,6 +2,8 @@ import torch
 from TTS.api import TTS
 from TTS.utils.manage import ModelManager
 from dotenv import load_dotenv
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Pre-download the model and accept the license
 ModelManager().download_model("tts_models/multilingual/multi-dataset/xtts_v2")
@@ -15,6 +17,21 @@ from flask_cors import CORS
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Set up logging
+log_file = 'service.log'
+logging.basicConfig(
+    handlers=[RotatingFileHandler(log_file, maxBytes=100000, backupCount=5)],
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
+@app.after_request
+def after_request(response):
+    logger.info(f'{request.remote_addr} - "{request.method} {request.path}" {response.status_code}')
+    return response
 
 # Get device and print diagnostic information
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -71,34 +88,41 @@ def save_audio(audio_segments, filename):
 
 @app.route('/api/tts', methods=['POST'])
 def text_to_speech():
+    logger.info(f"Received TTS request from {request.remote_addr}")
     data = request.json
     text = data.get('text')
     voice_file = data.get('voice_file', 'voices/default.wav')
 
     if not text:
+        logger.error("No text provided in request")
         return jsonify({"error": "Text is required"}), 400
 
     sentences = split_into_sentences(text)
-    audio_segments = []  # List to collect audio segments
+    audio_segments = []
 
-    # Generate audio without playback
-    tts_generator(sentences, audio_segments, voice_file)
-
-    # Save the audio to a file
-    output_filename = f"output_{len(os.listdir('outputs')) + 1}.wav"
-    save_audio(audio_segments, os.path.join('outputs', output_filename))
-
-    return jsonify({"message": "Audio generated successfully", "file": output_filename}), 200
+    try:
+        tts_generator(sentences, audio_segments, voice_file)
+        output_filename = f"output_{len(os.listdir('outputs')) + 1}.wav"
+        save_audio(audio_segments, os.path.join('outputs', output_filename))
+        logger.info(f"Successfully generated audio: {output_filename}")
+        return jsonify({"message": "Audio generated successfully", "file": output_filename}), 200
+    except Exception as e:
+        logger.error(f"Error generating audio: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/audio/<filename>', methods=['GET'])
 def get_audio(filename):
+    logger.info(f"Audio file request for {filename} from {request.remote_addr}")
     file_path = os.path.join('outputs', filename)
     if not os.path.exists(file_path):
+        logger.error(f"File not found: {filename}")
         return jsonify({"error": "File not found"}), 404
+    logger.info(f"Serving audio file: {filename}")
     return send_file(file_path, mimetype='audio/wav')
 
 @app.route('/api/status', methods=['GET'])
 def status():
+    logger.info(f"Status check from {request.remote_addr}")
     return jsonify({"status": "running", "device": device}), 200
 
 if __name__ == '__main__':
@@ -113,5 +137,8 @@ if __name__ == '__main__':
     # Get port from environment variable, default to 5000 if not set
     port = int(os.getenv('PORT', 5000))
 
+    logger.info(f"Starting TTS service on port {port}")
+    logger.info(f"Using device: {device}")
+    
     # Run the Flask app 
     app.run(host='0.0.0.0', port=port)
