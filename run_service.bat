@@ -10,6 +10,9 @@ if %errorLevel% == 0 (
     exit /b
 )
 
+:: Change to script directory
+cd /d "%~dp0"
+
 :: Run the PowerShell script
 powershell.exe -ExecutionPolicy Bypass -File "%~dp0run_service.ps1"
 
