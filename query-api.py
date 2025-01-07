@@ -7,6 +7,13 @@ import os
 # Define the API base URL
 base_url = "http://localhost:5000"
 
+# Check for text directory
+text_dir = os.path.join(os.getcwd(), 'text')
+if not os.path.exists(text_dir):
+    print(f"Error: 'text' directory does not exist at '{text_dir}'")
+    print("Please create a 'text' directory in your project root and place your text files there.")
+    sys.exit(1)
+
 def test_api(input_text, output_filename):
     # Test the /api/status endpoint
     print("Testing /api/status endpoint...")
@@ -20,7 +27,15 @@ def test_api(input_text, output_filename):
         sys.exit(1)
 
     # Read the input text file
-    input_path = os.path.abspath(os.path.join(os.getcwd(), input_text))
+    input_path = os.path.abspath(os.path.join(text_dir, input_text))
+    
+    # Verify input file exists
+    if not os.path.exists(input_path):
+        print(f"Error: Input file does not exist at '{input_path}'")
+        print("Current working directory:", os.getcwd())
+        print("Please ensure the file exists in the text directory and the path is correct.")
+        sys.exit(1)
+        
     try:
         with open(input_path, 'r', encoding='utf-8') as file:
             text_content = file.read()
@@ -57,6 +72,16 @@ def test_api(input_text, output_filename):
             if output_filename:
                 # Save the audio to the output file
                 output_path = os.path.abspath(os.path.join(os.getcwd(), output_filename))
+                
+                # Create output directory if needed
+                output_dir = os.path.dirname(output_path)
+                if output_dir and not os.path.exists(output_dir):
+                    try:
+                        os.makedirs(output_dir)
+                    except Exception as e:
+                        print(f"Error creating output directory '{output_dir}': {e}")
+                        sys.exit(1)
+                        
                 try:
                     with open(output_path, 'wb') as f:
                         f.write(audio_response.content)
