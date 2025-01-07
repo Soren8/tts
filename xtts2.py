@@ -79,28 +79,6 @@ def tts_generator(sentences, audio_segments, voice_file):
             audio = np.array(wav)
             audio_segments.append(audio)  # Collect audio for saving
 
-def save_audio(audio_segments, filename):
-    # Concatenate all audio segments
-    if not audio_segments:
-        print("No audio segments to save.")
-        return
-    concatenated_audio = np.concatenate(audio_segments)
-
-    # Normalize audio to prevent clipping
-    max_val = np.max(np.abs(concatenated_audio))
-    if max_val > 0:
-        concatenated_audio = concatenated_audio / max_val
-
-    # Convert to 16-bit PCM
-    concatenated_audio = (concatenated_audio * 32767).astype(np.int16)
-
-    # Write to WAV file
-    with wave.open(filename, 'w') as wf:
-        wf.setnchannels(1)  # Mono
-        wf.setsampwidth(2)  # 2 bytes per sample
-        wf.setframerate(sample_rate)
-        wf.writeframes(concatenated_audio.tobytes())
-    print(f"All audio saved to {filename}")
 
 @app.route('/api/tts', methods=['POST'])
 def text_to_speech():
@@ -118,23 +96,35 @@ def text_to_speech():
 
     try:
         tts_generator(sentences, audio_segments, voice_file)
-        output_filename = f"output_{len(os.listdir('outputs')) + 1}.wav"
-        save_audio(audio_segments, os.path.join('outputs', output_filename))
-        logger.info(f"Successfully generated audio: {output_filename}")
-        return jsonify({"message": "Audio generated successfully", "file": output_filename}), 200
+        
+        # Concatenate audio segments
+        concatenated_audio = np.concatenate(audio_segments)
+        
+        # Normalize audio
+        max_val = np.max(np.abs(concatenated_audio))
+        if max_val > 0:
+            concatenated_audio = concatenated_audio / max_val
+        
+        # Convert to 16-bit PCM
+        concatenated_audio = (concatenated_audio * 32767).astype(np.int16)
+        
+        # Create in-memory WAV file
+        import io
+        wav_io = io.BytesIO()
+        with wave.open(wav_io, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(concatenated_audio.tobytes())
+        
+        wav_io.seek(0)
+        logger.info("Successfully generated audio")
+        return send_file(wav_io, mimetype='audio/wav')
+        
     except Exception as e:
         logger.error(f"Error generating audio: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/audio/<filename>', methods=['GET'])
-def get_audio(filename):
-    logger.info(f"Audio file request for {filename} from {request.remote_addr}")
-    file_path = os.path.join('outputs', filename)
-    if not os.path.exists(file_path):
-        logger.error(f"File not found: {filename}")
-        return jsonify({"error": "File not found"}), 404
-    logger.info(f"Serving audio file: {filename}")
-    return send_file(file_path, mimetype='audio/wav')
 
 @app.route('/api/status', methods=['GET'])
 def status():
@@ -146,7 +136,6 @@ if __name__ == '__main__':
     load_dotenv()
     
     # Create necessary directories if they don't exist
-    os.makedirs('outputs', exist_ok=True)
     os.makedirs('voices', exist_ok=True)
     os.makedirs('text', exist_ok=True)
 
