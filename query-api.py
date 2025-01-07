@@ -2,6 +2,7 @@ import requests
 import json
 import sys
 import argparse
+import os
 
 # Define the API base URL
 base_url = "http://localhost:5000"
@@ -19,11 +20,12 @@ def test_api(input_text, output_filename):
         sys.exit(1)
 
     # Read the input text file
+    input_path = os.path.abspath(os.path.join(os.getcwd(), input_text))
     try:
-        with open(input_text, 'r') as file:
+        with open(input_path, 'r', encoding='utf-8') as file:
             text_content = file.read()
     except Exception as e:
-        print(f"Error reading input file: {e}")
+        print(f"Error reading input file '{input_path}': {e}")
         sys.exit(1)
 
     # Test the /api/tts endpoint with the file content
@@ -54,9 +56,14 @@ def test_api(input_text, output_filename):
             
             if output_filename:
                 # Save the audio to the output file
-                with open(output_filename, 'wb') as f:
-                    f.write(audio_response.content)
-                print(f"Audio saved to {output_filename}")
+                output_path = os.path.abspath(os.path.join(os.getcwd(), output_filename))
+                try:
+                    with open(output_path, 'wb') as f:
+                        f.write(audio_response.content)
+                    print(f"Audio saved to {output_path}")
+                except Exception as e:
+                    print(f"Error saving output file '{output_path}': {e}")
+                    sys.exit(1)
             else:
                 print("Audio generated successfully (not saved to file)")
         except requests.exceptions.RequestException as e:
