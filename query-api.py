@@ -1,15 +1,12 @@
 import requests
 import json
 import sys
-import sounddevice as sd
-import numpy as np
-import wave
-import io
+import argparse
 
 # Define the API base URL
 base_url = "http://localhost:5000"
 
-def test_api():
+def test_api(input_text, output_filename):
     # Test the /api/status endpoint
     print("Testing /api/status endpoint...")
     try:
@@ -21,10 +18,18 @@ def test_api():
         print(f"Error testing status endpoint: {e}")
         sys.exit(1)
 
-    # Test the /api/tts endpoint
+    # Read the input text file
+    try:
+        with open(input_text, 'r') as file:
+            text_content = file.read()
+    except Exception as e:
+        print(f"Error reading input file: {e}")
+        sys.exit(1)
+
+    # Test the /api/tts endpoint with the file content
     print("\nTesting /api/tts endpoint...")
     tts_payload = {
-        "text": "Hello, this is a test sentence.",
+        "text": text_content,
         "voice_file": "voices/default.wav"
     }
     try:
@@ -47,24 +52,10 @@ def test_api():
             audio_response = requests.get(f"{base_url}/api/audio/{response_data['file']}")
             audio_response.raise_for_status()
             
-            # Play the audio directly
-            wav_file = io.BytesIO(audio_response.content)
-            with wave.open(wav_file, 'rb') as wf:
-                # Get audio parameters
-                channels = wf.getnchannels()
-                sample_width = wf.getsampwidth()
-                sample_rate = wf.getframerate()
-                
-                # Read the audio data
-                audio_data = wf.readframes(wf.getnframes())
-                
-                # Convert to numpy array
-                audio_array = np.frombuffer(audio_data, dtype=np.int16)
-                
-                # Play the audio
-                print("Playing audio...")
-                sd.play(audio_array, sample_rate)
-                sd.wait()  # Wait until audio finishes playing
+            # Save the audio to the output file
+            with open(output_filename, 'wb') as f:
+                f.write(audio_response.content)
+            print(f"Audio saved to {output_filename}")
         except requests.exceptions.RequestException as e:
             print(f"Error downloading audio file: {e}")
             sys.exit(1)
@@ -75,4 +66,9 @@ def test_api():
     print("\nAPI testing complete.")
 
 if __name__ == "__main__":
-    test_api()
+    parser = argparse.ArgumentParser(description='Convert text file to speech using TTS API')
+    parser.add_argument('input_file', help='Path to the input text file')
+    parser.add_argument('output_file', help='Path to save the output audio file')
+    args = parser.parse_args()
+    
+    test_api(args.input_file, args.output_file)
