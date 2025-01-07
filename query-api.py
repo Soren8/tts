@@ -52,10 +52,13 @@ def test_api(input_text, output_filename):
             audio_response = requests.get(f"{base_url}/api/audio/{response_data['file']}")
             audio_response.raise_for_status()
             
-            # Save the audio to the output file
-            with open(output_filename, 'wb') as f:
-                f.write(audio_response.content)
-            print(f"Audio saved to {output_filename}")
+            if output_filename:
+                # Save the audio to the output file
+                with open(output_filename, 'wb') as f:
+                    f.write(audio_response.content)
+                print(f"Audio saved to {output_filename}")
+            else:
+                print("Audio generated successfully (not saved to file)")
         except requests.exceptions.RequestException as e:
             print(f"Error downloading audio file: {e}")
             sys.exit(1)
@@ -68,7 +71,7 @@ def test_api(input_text, output_filename):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert text file to speech using TTS API')
     parser.add_argument('input_file', help='Path to the input text file')
-    parser.add_argument('output_file', help='Path to save the output audio file')
+    parser.add_argument('output_file', nargs='?', help='Path to save the output audio file (optional)')
     args = parser.parse_args()
     
     test_api(args.input_file, args.output_file)
