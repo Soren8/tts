@@ -68,6 +68,13 @@ else:
 # Set up audio stream
 sample_rate = tts.synthesizer.output_sample_rate
 
+def preprocess_text(text):
+    """Clean and prepare text for TTS processing"""
+    # Remove newlines and extra spaces
+    text = ' '.join(text.split())
+    # Add any other preprocessing steps here if needed
+    return text.strip()
+
 def split_into_sentences(text):
     # Simple sentence splitting
     return re.split('(?<=[.!?]) +', text)
@@ -91,6 +98,8 @@ def text_to_speech():
         logger.error("No text provided in request")
         return jsonify({"error": "Text is required"}), 400
 
+    # Preprocess the text
+    text = preprocess_text(text)
     sentences = split_into_sentences(text)
     audio_segments = []
 

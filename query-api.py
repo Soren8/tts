@@ -8,6 +8,13 @@ import numpy as np
 from scipy.io.wavfile import read
 import io
 
+def preprocess_text(text):
+    """Clean and prepare text for TTS processing"""
+    # Remove newlines and extra spaces
+    text = ' '.join(text.split())
+    # Add any other preprocessing steps here if needed
+    return text.strip()
+
 # Define output directory
 output_dir = os.path.join(os.getcwd(), 'outputs')
 
@@ -60,6 +67,7 @@ def test_api(input_text, output_filename):
     try:
         with open(input_path, 'r', encoding='utf-8') as file:
             text_content = file.read()
+            text_content = preprocess_text(text_content)  # Add preprocessing
     except Exception as e:
         print(f"Error reading input file '{input_path}': {e}")
         sys.exit(1)
