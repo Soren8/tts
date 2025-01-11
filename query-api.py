@@ -3,6 +3,24 @@ import json
 import sys
 import argparse
 import os
+import sounddevice as sd
+import numpy as np
+from scipy.io.wavfile import read
+import io
+
+def play_audio(audio_bytes):
+    """Play audio from bytes containing WAV data"""
+    try:
+        # Convert bytes to file-like object
+        audio_file = io.BytesIO(audio_bytes)
+        # Read WAV file from memory
+        sample_rate, audio_data = read(audio_file)
+        # Play audio
+        sd.play(audio_data, sample_rate)
+        sd.wait()  # Wait until audio is finished playing
+        print("Finished playing audio")
+    except Exception as e:
+        print(f"Error playing audio: {e}")
 
 # Define the API base URL
 base_url = "http://localhost:5000"
@@ -58,6 +76,7 @@ def test_api(input_text, output_filename):
         )
         tts_response.raise_for_status()
         print("TTS Response: Received audio data (binary)")
+        play_audio(tts_response.content)  # Play the audio immediately
     except requests.exceptions.RequestException as e:
         print(f"Error testing TTS endpoint: {e}")
         print("Response content:", tts_response.content)
