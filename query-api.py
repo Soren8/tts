@@ -117,6 +117,77 @@ def test_api(input_text, output_filename):
 
     print("\nAPI testing complete.")
 
+def test_api_stream(input_text, output_filename):
+    # Test the /api/status endpoint first
+    print("Testing /api/status endpoint...")
+    try:
+        status_response = requests.get(f"{base_url}/api/status", timeout=10)
+        status_response.raise_for_status()
+        print("Status Response:")
+        print(json.dumps(status_response.json(), indent=2))
+    except requests.exceptions.RequestException as e:
+        print(f"Error testing status endpoint: {e}")
+        sys.exit(1)
+
+    # Read and preprocess the input text
+    input_path = os.path.abspath(os.path.join(text_dir, input_text))
+    if not os.path.exists(input_path):
+        print(f"Error: Input file does not exist at '{input_path}'")
+        sys.exit(1)
+        
+    try:
+        with open(input_path, 'r', encoding='utf-8') as file:
+            text_content = file.read()
+            text_content = preprocess_text(text_content)
+    except Exception as e:
+        print(f"Error reading input file '{input_path}': {e}")
+        sys.exit(1)
+
+    print("\nTesting /api/tts/stream endpoint...")
+    tts_payload = {
+        "text": text_content,
+        "voice_file": "voices/default.wav"
+    }
+
+    try:
+        response = requests.post(
+            f"{base_url}/api/tts/stream",
+            json=tts_payload,
+            headers={'Content-Type': 'application/json'},
+            stream=True
+        )
+        response.raise_for_status()
+
+        # Initialize a list to store all audio chunks if saving is needed
+        all_chunks = []
+        
+        for chunk in response.iter_content(chunk_size=None):
+            if chunk:
+                all_chunks.append(chunk)
+                # Play each chunk as it arrives
+                play_audio(chunk)
+
+        # If output filename is provided, save the complete audio
+        if output_filename:
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+                
+            output_path = os.path.abspath(os.path.join(output_dir, output_filename))
+            
+            try:
+                with open(output_path, 'wb') as f:
+                    for chunk in all_chunks:
+                        f.write(chunk)
+                print(f"Complete audio saved to {output_path}")
+            except Exception as e:
+                print(f"Error saving output file '{output_path}': {e}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error testing streaming TTS endpoint: {e}")
+        sys.exit(1)
+
+    print("\nStreaming API testing complete.")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert text file to speech using TTS API')
     parser.add_argument('input_file', help='Path to the input text file')
@@ -124,4 +195,4 @@ if __name__ == "__main__":
                        help='Filename to save the output audio file in outputs/ directory (optional)')
     args = parser.parse_args()
     
-    test_api(args.input_file, args.output_file)
+    test_api_stream(args.input_file, args.output_file)  # Use streaming version instead

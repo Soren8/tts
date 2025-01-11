@@ -4,6 +4,8 @@ from TTS.utils.manage import ModelManager
 from dotenv import load_dotenv
 import logging
 from logging.handlers import RotatingFileHandler
+from flask import Response
+import io
 
 # Pre-download the model and accept the license
 ModelManager().download_model("tts_models/multilingual/multi-dataset/xtts_v2")
@@ -134,6 +136,52 @@ def text_to_speech():
         logger.error(f"Error generating audio: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/tts/stream', methods=['POST'])
+def text_to_speech_stream():
+    logger.info(f"Received streaming TTS request from {request.remote_addr}")
+    data = request.json
+    text = data.get('text')
+    voice_file = data.get('voice_file', 'voices/default.wav')
+
+    if not text:
+        logger.error("No text provided in request")
+        return jsonify({"error": "Text is required"}), 400
+
+    # Preprocess the text
+    text = preprocess_text(text)
+    sentences = split_into_sentences(text)
+
+    def generate():
+        for sentence in sentences:
+            if sentence.strip():
+                try:
+                    wav = tts.tts(sentence, speaker_wav=voice_file, language="en")
+                    audio = np.array(wav)
+                    
+                    # Normalize audio
+                    max_val = np.max(np.abs(audio))
+                    if max_val > 0:
+                        audio = audio / max_val
+                    
+                    # Convert to 16-bit PCM
+                    audio = (audio * 32767).astype(np.int16)
+                    
+                    # Create WAV file for this sentence
+                    wav_io = io.BytesIO()
+                    with wave.open(wav_io, 'wb') as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(sample_rate)
+                        wf.writeframes(audio.tobytes())
+                    
+                    wav_io.seek(0)
+                    yield wav_io.getvalue()
+                except Exception as e:
+                    logger.error(f"Error generating audio for sentence: {str(e)}")
+                    continue
+
+    return Response(generate(), mimetype='audio/wav')
 
 @app.route('/api/status', methods=['GET'])
 def status():
