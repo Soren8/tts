@@ -57,49 +57,34 @@ def test_api(input_text, output_filename):
             timeout=30
         )
         tts_response.raise_for_status()
-        print("TTS Response:")
-        print(json.dumps(tts_response.json(), indent=2))
+        print("TTS Response: Received audio data (binary)")
     except requests.exceptions.RequestException as e:
         print(f"Error testing TTS endpoint: {e}")
         print("Response content:", tts_response.content)
         sys.exit(1)
 
-    # Test the /api/audio/<filename> endpoint
-    response_data = tts_response.json()
-    if 'file' in response_data:
-        print("\nTesting /api/audio/<filename> endpoint...")
-        try:
-            audio_response = requests.get(f"{base_url}/api/audio/{response_data['file']}", timeout=30)
-            audio_response.raise_for_status()
-            
-            if output_filename:
-                # Save the audio to the output file
-                output_path = os.path.abspath(os.path.join(os.getcwd(), output_filename))
+    # Save the audio data directly from the TTS response
+    if output_filename:
+        output_path = os.path.abspath(os.path.join(os.getcwd(), output_filename))
+        
+        # Create output directory if needed
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            try:
+                os.makedirs(output_dir)
+            except Exception as e:
+                print(f"Error creating output directory '{output_dir}': {e}")
+                sys.exit(1)
                 
-                # Create output directory if needed
-                output_dir = os.path.dirname(output_path)
-                if output_dir and not os.path.exists(output_dir):
-                    try:
-                        os.makedirs(output_dir)
-                    except Exception as e:
-                        print(f"Error creating output directory '{output_dir}': {e}")
-                        sys.exit(1)
-                        
-                try:
-                    with open(output_path, 'wb') as f:
-                        f.write(audio_response.content)
-                    print(f"Audio saved to {output_path}")
-                except Exception as e:
-                    print(f"Error saving output file '{output_path}': {e}")
-                    sys.exit(1)
-            else:
-                print("Audio generated successfully (not saved to file)")
-        except requests.exceptions.RequestException as e:
-            print(f"Error downloading audio file: {e}")
+        try:
+            with open(output_path, 'wb') as f:
+                f.write(tts_response.content)
+            print(f"Audio saved to {output_path}")
+        except Exception as e:
+            print(f"Error saving output file '{output_path}': {e}")
             sys.exit(1)
     else:
-        print("\nError: No audio file was generated.")
-        sys.exit(1)
+        print("Audio generated successfully (not saved to file)")
 
     print("\nAPI testing complete.")
 
