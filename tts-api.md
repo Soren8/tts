@@ -135,10 +135,6 @@ The API automatically:
 - NumPy
 - Wave
 
-## Rate Limits
-
-No rate limiting is currently implemented. Please use responsibly.
-
 ## Troubleshooting
 
 1. **No audio output:**
@@ -149,7 +145,6 @@ No rate limiting is currently implemented. Please use responsibly.
 2. **Poor audio quality:**
    - Use high-quality voice samples
    - Ensure text is properly formatted
-   - Check for GPU availability (CUDA recommended)
 
 3. **Long processing times:**
    - Use streaming endpoint for long texts
