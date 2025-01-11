@@ -18,7 +18,7 @@ def test_api(input_text, output_filename):
     # Test the /api/status endpoint
     print("Testing /api/status endpoint...")
     try:
-        status_response = requests.get(f"{base_url}/api/status")
+        status_response = requests.get(f"{base_url}/api/status", timeout=10)
         status_response.raise_for_status()  # Raise an exception for bad status codes
         print("Status Response:")
         print(json.dumps(status_response.json(), indent=2))
@@ -52,13 +52,16 @@ def test_api(input_text, output_filename):
     try:
         tts_response = requests.post(
             f"{base_url}/api/tts",
-            json=tts_payload
+            json=tts_payload,
+            headers={'Content-Type': 'application/json'},
+            timeout=30
         )
         tts_response.raise_for_status()
         print("TTS Response:")
         print(json.dumps(tts_response.json(), indent=2))
     except requests.exceptions.RequestException as e:
         print(f"Error testing TTS endpoint: {e}")
+        print("Response content:", tts_response.content)
         sys.exit(1)
 
     # Test the /api/audio/<filename> endpoint
@@ -66,7 +69,7 @@ def test_api(input_text, output_filename):
     if 'file' in response_data:
         print("\nTesting /api/audio/<filename> endpoint...")
         try:
-            audio_response = requests.get(f"{base_url}/api/audio/{response_data['file']}")
+            audio_response = requests.get(f"{base_url}/api/audio/{response_data['file']}", timeout=30)
             audio_response.raise_for_status()
             
             if output_filename:
