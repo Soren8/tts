@@ -8,6 +8,9 @@ import numpy as np
 from scipy.io.wavfile import read
 import io
 
+# Define output directory
+output_dir = os.path.join(os.getcwd(), 'outputs')
+
 def play_audio(audio_bytes):
     """Play audio from bytes containing WAV data"""
     try:
@@ -84,17 +87,16 @@ def test_api(input_text, output_filename):
 
     # Save the audio data directly from the TTS response
     if output_filename:
-        output_path = os.path.abspath(os.path.join(os.getcwd(), output_filename))
-        
-        # Create output directory if needed
-        output_dir = os.path.dirname(output_path)
-        if output_dir and not os.path.exists(output_dir):
+        # Create outputs directory if it doesn't exist
+        if not os.path.exists(output_dir):
             try:
                 os.makedirs(output_dir)
             except Exception as e:
                 print(f"Error creating output directory '{output_dir}': {e}")
                 sys.exit(1)
                 
+        output_path = os.path.abspath(os.path.join(output_dir, output_filename))
+        
         try:
             with open(output_path, 'wb') as f:
                 f.write(tts_response.content)
@@ -110,7 +112,8 @@ def test_api(input_text, output_filename):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert text file to speech using TTS API')
     parser.add_argument('input_file', help='Path to the input text file')
-    parser.add_argument('output_file', nargs='?', help='Path to save the output audio file (optional)')
+    parser.add_argument('output_file', nargs='?', 
+                       help='Filename to save the output audio file in outputs/ directory (optional)')
     args = parser.parse_args()
     
     test_api(args.input_file, args.output_file)
