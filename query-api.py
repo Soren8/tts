@@ -7,6 +7,7 @@ import sounddevice as sd
 import numpy as np
 from scipy.io.wavfile import read
 import io
+import wave
 
 def preprocess_text(text):
     """Clean and prepare text for TTS processing"""
@@ -158,14 +159,25 @@ def test_api_stream(input_text, output_filename):
         )
         response.raise_for_status()
 
-        # Initialize a list to store all audio chunks if saving is needed
-        all_chunks = []
-        
+        # Initialize variables for audio concatenation
+        all_audio = []
+        sample_rate = None
+        num_channels = None
+
         for chunk in response.iter_content(chunk_size=None):
             if chunk:
-                all_chunks.append(chunk)
                 # Play each chunk as it arrives
                 play_audio(chunk)
+                
+                # Read the chunk's audio data
+                audio_file = io.BytesIO(chunk)
+                with wave.open(audio_file, 'rb') as wf:
+                    if sample_rate is None:
+                        # Get sample rate and channels from first chunk
+                        sample_rate = wf.getframerate()
+                        num_channels = wf.getnchannels()
+                    audio_data = wf.readframes(wf.getnframes())
+                    all_audio.append(audio_data)
 
         # If output filename is provided, save the complete audio
         if output_filename:
@@ -175,9 +187,12 @@ def test_api_stream(input_text, output_filename):
             output_path = os.path.abspath(os.path.join(output_dir, output_filename))
             
             try:
-                with open(output_path, 'wb') as f:
-                    for chunk in all_chunks:
-                        f.write(chunk)
+                with wave.open(output_path, 'wb') as wf:
+                    wf.setnchannels(num_channels)
+                    wf.setsampwidth(2)  # 16-bit audio
+                    wf.setframerate(sample_rate)
+                    # Write all concatenated audio data
+                    wf.writeframes(b''.join(all_audio))
                 print(f"Complete audio saved to {output_path}")
             except Exception as e:
                 print(f"Error saving output file '{output_path}': {e}")
