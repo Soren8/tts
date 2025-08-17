@@ -91,7 +91,7 @@ pipeline = None
 def get_pipeline():
     global pipeline
     if pipeline is None:
-        pipeline = KPipeline(lang_code='a')  # American English
+        pipeline = KPipeline(lang_code='a', device=device)  # American English, use detected device
     return pipeline
 
 @app.route('/api/tts', methods=['POST'])
