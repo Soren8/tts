@@ -45,26 +45,8 @@ catch {
     exit 1
 }
 
-# Create virtual environment if it doesn't exist
-if (-not (Test-Path "venv")) {
-    Write-Log-Safe "Creating virtual environment..."
-    & python -m venv venv 2>&1 | ForEach-Object { Write-Log-Safe $_ }
-}
-
-# Activate virtual environment
-$activateScript = Join-Path $env:INSTALL_PATH "venv\Scripts\Activate.ps1"
-. $activateScript
-
-# Upgrade pip
-Write-Log-Safe "Upgrading pip..."
-& python -m pip install --upgrade pip 2>&1 | ForEach-Object { Write-Log-Safe $_ }
-
-# Install requirements
-Write-Log-Safe "Installing requirements..."
-& pip install -r requirements.txt 2>&1 | ForEach-Object { Write-Log-Safe $_ }
-
 # Start the service
 Write-Log-Safe "Starting TTS service..."
-Start-Process pythonw -ArgumentList "kokoro_tts.py" -NoNewWindow
+Start-Process python -ArgumentList "kokoro_tts.py" -NoNewWindow -Wait
 
 Write-Log-Safe "TTS service started successfully"
