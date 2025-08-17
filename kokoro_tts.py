@@ -171,9 +171,8 @@ if __name__ == "__main__":
     # Create necessary directories if they don't exist
     os.makedirs('outputs', exist_ok=True)
     
-    # Get port from environment variable, default to 5001 if not set
-    # (Using 5001 to avoid conflict with xtts2.py which uses 5000)
-    port = int(os.getenv('PORT', 5001))
+    # Get port from environment variable, default to 5000 if not set
+    port = int(os.getenv('PORT', 5000))
     
     logger.info(f"Starting Kokoro TTS service on port {port}")
     
