@@ -64,9 +64,6 @@ except PermissionError:
 # Ensure virtualenv is active
 ensure_venv()
 
-# Install dependencies if missing
-install_dependencies()
-
 # Original script imports (now safe after installs)
 import numpy as np
 from flask import Flask, request, jsonify, send_file, Response
