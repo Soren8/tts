@@ -168,3 +168,16 @@ def text_to_speech_stream():
 def status():
     logger.info(f"Status check from {request.remote_addr}")
     return jsonify({"status": "running", "device": "cpu"}), 200
+
+if __name__ == "__main__":
+    # Create necessary directories if they don't exist
+    os.makedirs('outputs', exist_ok=True)
+    
+    # Get port from environment variable, default to 5001 if not set
+    # (Using 5001 to avoid conflict with xtts2.py which uses 5000)
+    port = int(os.getenv('PORT', 5001))
+    
+    logger.info(f"Starting Kokoro TTS service on port {port}")
+    
+    # Run the Flask app 
+    app.run(host='0.0.0.0', port=port)
