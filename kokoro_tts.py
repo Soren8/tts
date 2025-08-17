@@ -75,10 +75,12 @@ install_dependencies()
 import torch
 import soundfile as sf
 from kokoro import KPipeline
-from flask import Flask, request, jsonify, send_file, Response
 
 # Remove any existing handlers from the root logger
 logging.getLogger().handlers = []
+
+# Device detection
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -143,11 +145,11 @@ def text_to_speech_stream():
         logger.error("No text provided in request")
         return jsonify({"error": "Text is required"}), 400
 
-    def generate():
+    def generate(text_to_process):
         try:
             pipeline = get_pipeline()
             voice = 'af_heart'
-            generator = pipeline(text, voice=voice, speed=1.0)
+            generator = pipeline(text_to_process, voice=voice, speed=1.0)
             
             for i, (gs, ps, audio) in enumerate(generator):
                 # Create in-memory WAV file for this chunk
@@ -161,14 +163,14 @@ def text_to_speech_stream():
         except Exception as e:
             logger.error(f"Error generating audio stream: {str(e)}")
             # We can't return an error in a stream, so just log it
-            pass
+            return
 
-    return Response(generate(), mimetype='audio/wav')
+    return Response(generate(text), mimetype='audio/wav')
 
 @app.route('/api/status', methods=['GET'])
 def status():
     logger.info(f"Status check from {request.remote_addr}")
-    return jsonify({"status": "running", "device": "cpu"}), 200
+    return jsonify({"status": "running", "device": device}), 200
 
 if __name__ == "__main__":
     # Create necessary directories if they don't exist
