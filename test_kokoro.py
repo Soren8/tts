@@ -9,10 +9,10 @@ import os
 
 def test_kokoro_tts():
     """Test the Kokoro TTS service by sending a text request and saving the audio response."""
-    url = "http://localhost:5001/api/tts"
-    data = {"text": "Hello, this is a test of the Kokoro TTS service running on port 5001."}
+    url = "http://localhost:5000/api/tts"
+    data = {"text": "Hello, this is a test of the Kokoro TTS service running on port 5000."}
     
-    print("Sending TTS request to http://localhost:5001/api/tts...")
+    print("Sending TTS request to http://localhost:5000/api/tts...")
     response = requests.post(url, json=data)
     
     if response.status_code == 200:
