@@ -65,6 +65,6 @@ Write-Log-Safe "Installing requirements..."
 
 # Start the service
 Write-Log-Safe "Starting TTS service..."
-Start-Process pythonw -ArgumentList "xtts2.py" -NoNewWindow
+Start-Process pythonw -ArgumentList "kokoro_tts.py" -NoNewWindow
 
 Write-Log-Safe "TTS service started successfully"

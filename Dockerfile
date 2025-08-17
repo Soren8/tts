@@ -23,6 +23,9 @@ COPY download_model.py .
 # Pre-download the TTS model using our script
 RUN python download_model.py
 
+# Remove XTTS-specific model (if exists) since kokoro uses different model
+RUN rm -rf ~/.local/share/tts/tts_models--multilingual--multi-dataset--xtts_v2
+
 # Copy the rest of the application code
 COPY . .
 
@@ -33,4 +36,4 @@ RUN mkdir -p outputs voices text
 EXPOSE 5000
 
 # Command to run the application
-CMD ["python", "xtts2.py"]
+CMD ["python", "kokoro_tts.py"]

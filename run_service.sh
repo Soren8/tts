@@ -27,7 +27,7 @@ pip install -r requirements.txt
 
 # Run the service
 echo "Starting TTS service..."
-python xtts2.py
+python kokoro_tts.py
 
 # Deactivate venv (this line won't be reached while service is running)
 deactivate
