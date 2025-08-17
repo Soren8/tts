@@ -23,7 +23,7 @@ def ensure_venv():
         sys.exit()
     # List of required packages with versions where needed
     requirements = [
-        'torch==2.2.0+cu118',
+        'torch==2.8.0',
         'kokoro',
         'misaki[en]',
         'soundfile',
