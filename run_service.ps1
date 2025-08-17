@@ -48,21 +48,10 @@ catch {
 # Start the service
 Write-Log-Safe "Starting TTS service..."
 try {
-    # Start the service without waiting for it to complete
-    $process = Start-Process python -ArgumentList "kokoro_tts.py" -NoNewWindow -PassThru
+    # Start the service in a hidden window and don't wait
+    $process = Start-Process python -ArgumentList "kokoro_tts.py" -WindowStyle Hidden -PassThru
     
-    # Wait a moment for the process to start
-    Start-Sleep -Seconds 5
-    
-    # Check if the process is still running
-    $isRunning = (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) -ne $null
-    
-    if ($isRunning) {
-        Write-Log-Safe "TTS service appears to be running (PID: $($process.Id))"
-    } else {
-        Write-Log-Safe "TTS service failed to start (exited immediately with code $($process.ExitCode))"
-        exit $process.ExitCode
-    }
+    Write-Log-Safe "TTS service started (PID: $($process.Id))"
 } catch {
     Write-Log-Safe "Failed to start TTS service: $_"
     exit 1
