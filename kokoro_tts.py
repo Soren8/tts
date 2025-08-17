@@ -65,12 +65,6 @@ except PermissionError:
     logger.addHandler(file_handler)
     logger.warning(f"Could not write to {log_file}, using fallback log file: {fallback_log}")
 
-# Remove any existing handlers from the root logger
-logging.getLogger().handlers = []
-
-# Initialize Flask app
-app = Flask(__name__)
-
 # Ensure virtualenv is active
 ensure_venv()
 
@@ -81,6 +75,13 @@ install_dependencies()
 import torch
 import soundfile as sf
 from kokoro import KPipeline
+from flask import Flask, request, jsonify, send_file, Response
+
+# Remove any existing handlers from the root logger
+logging.getLogger().handlers = []
+
+# Initialize Flask app
+app = Flask(__name__)
 
 # Global pipeline instance
 pipeline = None
