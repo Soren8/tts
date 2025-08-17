@@ -23,20 +23,25 @@ def ensure_venv():
         sys.exit()
     # List of required packages with versions where needed
     requirements = [
-        'torch==2.8.0',
+        'torch==2.8.0+cu128',
         'kokoro',
         'misaki[en]',
         'soundfile',
         'numpy',
         'flask',
-        'flask-cors'
+        'flask-cors',
+        'torchfile'
     ]
+    CUDA_INDEX_URL = 'https://download.pytorch.org/whl/cu128'
     for pkg in requirements:
         try:
             __import__(pkg.split('==')[0].split('[')[0])  # Check if importable
         except ImportError as e:
             print(f"Installing {pkg}...")
-            subprocess.run([sys.executable, '-m', 'pip', 'install', pkg], check=True)
+            cmd = [sys.executable, '-m', 'pip', 'install', pkg]
+            if pkg.startswith('torch=='):
+                cmd.extend(['--index-url', CUDA_INDEX_URL])
+            subprocess.run(cmd, check=True)
 
 # Set up logging
 log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'service.log')
