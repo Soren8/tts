@@ -15,6 +15,14 @@ cd /d "%~dp0"
 
 :: Run the PowerShell script
 powershell.exe -ExecutionPolicy Bypass -File "%~dp0run_service.ps1"
+set powershellExitCode=%errorlevel%
+
+:: Check if PowerShell script succeeded
+if %powershellExitCode% neq 0 (
+    echo Error: PowerShell script failed with exit code %powershellExitCode%
+    pause
+    exit /b %powershellExitCode%
+)
 
 :: Pause to see output (optional)
 pause
