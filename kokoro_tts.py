@@ -16,7 +16,7 @@ def ensure_venv():
         # Create venv if it doesn't exist
         if not os.path.exists(VENV_PYTHON):
             print("Creating virtualenv with system packages...")
-            subprocess.run([sys.executable, '-m', 'venv', VENV_PATH, '--system-site-packages'], check=True)
+            subprocess.run([sys.executable, '-m', 'kokoro_venv', VENV_PATH, '--system-site-packages'], check=True)
         # Re-run the script in the virtualenv
         print("Activating virtualenv and rerunning...")
         subprocess.run(f'"{VENV_ACTIVATE}" && "{VENV_PYTHON}" "{__file__}" {" ".join(sys.argv[1:])}', shell=True)
