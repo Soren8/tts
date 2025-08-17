@@ -1,6 +1,11 @@
 import os
 import sys
 import subprocess
+from flask import Flask, request, jsonify, send_file, Response
+import io
+import logging
+from logging.handlers import RotatingFileHandler
+import numpy as np
 
 # Path to your virtualenv (adjust if needed; assumes same dir as script)
 VENV_PATH = os.path.join(os.path.dirname(__file__), 'kokoro_env')
@@ -25,14 +30,46 @@ def install_dependencies():
         'torch==2.8.0',
         'kokoro',
         'misaki[en]',
-        'soundfile'
+        'soundfile',
+        'numpy',
+        'flask',
+        'flask-cors'
     ]
     for pkg in requirements:
         try:
             __import__(pkg.split('==')[0].split('[')[0])  # Check if importable
-        except ImportError:
+        except ImportError as e:
             print(f"Installing {pkg}...")
             subprocess.run([sys.executable, '-m', 'pip', 'install', pkg], check=True)
+
+# Set up logging
+log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'service.log')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create formatter
+formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+try:
+    # Create rotating file handler
+    file_handler = RotatingFileHandler(log_file, maxBytes=10485760, backupCount=5)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+except PermissionError:
+    # Fallback to a unique log file if the main one is locked
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    fallback_log = os.path.join(temp_dir, f'tts_service_{os.getpid()}.log')
+    file_handler = RotatingFileHandler(fallback_log, maxBytes=10485760, backupCount=5)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.warning(f"Could not write to {log_file}, using fallback log file: {fallback_log}")
+
+# Remove any existing handlers from the root logger
+logging.getLogger().handlers = []
+
+# Initialize Flask app
+app = Flask(__name__)
 
 # Ensure virtualenv is active
 ensure_venv()
@@ -45,17 +82,89 @@ import torch
 import soundfile as sf
 from kokoro import KPipeline
 
-def main(text):
-    pipeline = KPipeline(lang_code='a')  # American English
-    voice = 'af_heart'
-    generator = pipeline(text, voice=voice, speed=1.0)
-    for i, (gs, ps, audio) in enumerate(generator):
-        output_file = f'output_{i}.wav'
-        sf.write(output_file, audio, 24000)
-        print(f"Saved audio chunk {i} to {output_file}")
-        print(f"Graph: {gs}")
-        print(f"Phonemes: {ps}")
+# Global pipeline instance
+pipeline = None
 
-if __name__ == "__main__":
-    text = sys.argv[1] if len(sys.argv) > 1 else "Hello, this is a test using Kokoro TTS."
-    main(text)
+def get_pipeline():
+    global pipeline
+    if pipeline is None:
+        pipeline = KPipeline(lang_code='a')  # American English
+    return pipeline
+
+@app.route('/api/tts', methods=['POST'])
+def text_to_speech():
+    logger.info(f"Received TTS request from {request.remote_addr}")
+    data = request.json
+    text = data.get('text')
+    
+    if not text:
+        logger.error("No text provided in request")
+        return jsonify({"error": "Text is required"}), 400
+
+    try:
+        # Generate audio
+        pipeline = get_pipeline()
+        voice = 'af_heart'
+        generator = pipeline(text, voice=voice, speed=1.0)
+        
+        # Collect all audio chunks
+        audio_chunks = []
+        for i, (gs, ps, audio) in enumerate(generator):
+            audio_chunks.append(audio)
+            logger.info(f"Generated audio chunk {i}")
+        
+        # Concatenate audio chunks
+        if audio_chunks:
+            concatenated_audio = np.concatenate(audio_chunks)
+        else:
+            logger.error("No audio generated")
+            return jsonify({"error": "No audio generated"}), 500
+        
+        # Create in-memory WAV file
+        wav_io = io.BytesIO()
+        sf.write(wav_io, concatenated_audio, 24000, format='WAV')
+        wav_io.seek(0)
+        
+        logger.info("Successfully generated audio")
+        return send_file(wav_io, mimetype='audio/wav')
+        
+    except Exception as e:
+        logger.error(f"Error generating audio: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/tts/stream', methods=['POST'])
+def text_to_speech_stream():
+    logger.info(f"Received streaming TTS request from {request.remote_addr}")
+    data = request.json
+    text = data.get('text')
+    
+    if not text:
+        logger.error("No text provided in request")
+        return jsonify({"error": "Text is required"}), 400
+
+    def generate():
+        try:
+            pipeline = get_pipeline()
+            voice = 'af_heart'
+            generator = pipeline(text, voice=voice, speed=1.0)
+            
+            for i, (gs, ps, audio) in enumerate(generator):
+                # Create in-memory WAV file for this chunk
+                wav_io = io.BytesIO()
+                sf.write(wav_io, audio, 24000, format='WAV')
+                wav_io.seek(0)
+                
+                yield wav_io.getvalue()
+                logger.info(f"Streamed audio chunk {i}")
+                
+        except Exception as e:
+            logger.error(f"Error generating audio stream: {str(e)}")
+            # We can't return an error in a stream, so just log it
+            pass
+
+    return Response(generate(), mimetype='audio/wav')
+
+@app.route('/api/status', methods=['GET'])
+def status():
+    logger.info(f"Status check from {request.remote_addr}")
+    return jsonify({"status": "running", "device": "cpu"}), 200
