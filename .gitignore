@@ -6,3 +6,5 @@ voices/*
 venv/*
 .env
 service.log
+__pycache__/*
+kokoro_env/*
