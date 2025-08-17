@@ -1,11 +1,9 @@
 import os
 import sys
 import subprocess
-from flask import Flask, request, jsonify, send_file, Response
-import io
 import logging
 from logging.handlers import RotatingFileHandler
-import numpy as np
+import io
 
 # Path to your virtualenv (adjust if needed; assumes same dir as script)
 VENV_PATH = os.path.join(os.path.dirname(__file__), 'kokoro_env')
@@ -23,8 +21,6 @@ def ensure_venv():
         print("Activating virtualenv and rerunning...")
         subprocess.run(f'"{VENV_ACTIVATE}" && "{VENV_PYTHON}" "{__file__}" {" ".join(sys.argv[1:])}', shell=True)
         sys.exit()
-
-def install_dependencies():
     # List of required packages with versions where needed
     requirements = [
         'torch==2.8.0',
@@ -72,6 +68,8 @@ ensure_venv()
 install_dependencies()
 
 # Original script imports (now safe after installs)
+import numpy as np
+from flask import Flask, request, jsonify, send_file, Response
 import torch
 import soundfile as sf
 from kokoro import KPipeline
