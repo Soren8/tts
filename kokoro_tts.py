@@ -24,10 +24,10 @@ def ensure_venv():
     # List of required packages with versions where needed
     requirements = [
         'torch==2.8.0+cu128',
+        'numpy',
+        'soundfile',
         'kokoro',
         'misaki[en]',
-        'soundfile',
-        'numpy',
         'flask',
         'flask-cors',
         'torchfile'
