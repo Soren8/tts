@@ -129,7 +129,7 @@ def semantic_to_audio(codes_file, output_file, temp_dir='tts_temp'):
 
 if __name__ == '__main__':
     # Example usage
-    ref_audio = 'voices/default.wav'  # Reference audio file
+    ref_audio = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voices', 'default.wav')  # Reference audio file
     ref_text = 'Your reference text here.'    # Replace with the exact transcript of the reference audio
     text = 'Hello, this is a test of OpenAudio S1 text-to-speech.'  # The text to convert to speech
     output_file = 'output.wav'                # Output audio file
