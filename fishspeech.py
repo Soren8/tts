@@ -41,14 +41,15 @@ logger.addHandler(handler)
 
 ensure_venv()
 
-from fish_speech_lib.inference import FishSpeech
-import soundfile as sf
-
-# Create .project-root file if not exists (required by the library)
+# Create .project-root file before importing fish speech library
 project_root_file = '.project-root'
 if not os.path.exists(project_root_file):
     Path(project_root_file).touch()
     logger.info("Created .project-root file")
+
+from fish_speech_lib.inference import FishSpeech
+import soundfile as sf
+
 
 def text_to_speech(text, ref_audio, ref_text, output_file='output.wav', device='cuda', max_new_tokens=1000, chunk_length=1000):
     tts = FishSpeech(device=device)
