@@ -30,8 +30,8 @@ def ensure_venv():
         import fish_speech_lib
         import soundfile
     except ImportError:
-        print("Installing fish-speech-lib and soundfile...")
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'fish-speech-lib', 'soundfile'], check=True)
+        print("Installing fish-speech-lib, soundfile, and torchaudio...")
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'fish-speech-lib', 'soundfile', 'torchaudio'], check=True)
 
 # Set up logging
 logger = logging.getLogger(__name__)
