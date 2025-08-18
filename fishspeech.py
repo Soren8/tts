@@ -39,13 +39,14 @@ logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
 logger.addHandler(handler)
 
-ensure_venv()
-
 # Create .project-root file before importing fish speech library
 project_root_file = '.project-root'
 if not os.path.exists(project_root_file):
     Path(project_root_file).touch()
     logger.info("Created .project-root file")
+
+ensure_venv()
+
 
 from fish_speech_lib.inference import FishSpeech
 import soundfile as sf
