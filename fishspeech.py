@@ -89,7 +89,7 @@ def prepare_reference(ref_audio, ref_text, temp_dir='tts_temp'):
         VENV_PYTHON, 'fish_speech/models/dac/inference.py',
         '-i', ref_audio_temp,
         '--checkpoint-path', vqgan_checkpoint,
-        '--output', prompt_tokens
+        '--output-path', prompt_tokens
     ], cwd=os.getcwd(), check=True)  # cwd is repo dir
 
     return prompt_tokens, ref_text
@@ -121,7 +121,7 @@ def semantic_to_audio(codes_file, output_file, temp_dir='tts_temp'):
         VENV_PYTHON, 'fish_speech/models/dac/inference.py',
         '-i', codes_file,
         '--checkpoint-path', vqgan_checkpoint,
-        '--output', generated_audio
+        '--output-path', generated_audio
     ], cwd=os.getcwd(), check=True)
 
     # Copy to output_file
