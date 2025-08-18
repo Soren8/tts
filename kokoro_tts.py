@@ -5,8 +5,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 import io
 
-# Path to your virtualenv (using standard 'venv' name)
-VENV_PATH = os.path.join(os.path.dirname(__file__), 'venv')
+# Path to your virtualenv (using 'kokoro_env' name)
+VENV_PATH = os.path.join(os.path.dirname(__file__), 'kokoro_env')
 VENV_ACTIVATE = os.path.join(VENV_PATH, 'Scripts', 'activate.bat')
 VENV_PYTHON = os.path.join(VENV_PATH, 'Scripts', 'python.exe')
 
