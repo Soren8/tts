@@ -86,7 +86,7 @@ def prepare_reference(ref_audio, ref_text, temp_dir='tts_temp'):
     vqgan_checkpoint = 'checkpoints/openaudio-s1-mini/codec.pth'
     prompt_tokens = os.path.join(temp_dir, 'prompt_tokens.npy')
     subprocess.run([
-        VENV_PYTHON, 'fish_speech/models/dac/inference.py',
+        VENV_PYTHON, 'fish_speech/models/dac/encode.py',
         '-i', ref_audio_temp,
         '--checkpoint-path', vqgan_checkpoint,
         '--output-path', prompt_tokens
