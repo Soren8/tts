@@ -4,8 +4,8 @@ import subprocess
 import logging
 import shutil
 
-# Path to Fish Speech repo
-REPO_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fish-speech'))
+# Path to Fish Speech repo (one level up from current dir)
+REPO_PATH = os.path.join('..', 'fish-speech')
 VENV_PATH = os.path.join(REPO_PATH, 'fishspeech_venv')
 VENV_PYTHON = os.path.join(VENV_PATH, 'bin', 'python') if os.name != 'nt' else os.path.join(VENV_PATH, 'Scripts', 'python.exe')
 VENV_ACTIVATE = os.path.join(VENV_PATH, 'bin', 'activate') if os.name != 'nt' else os.path.join(VENV_PATH, 'Scripts', 'activate.bat')
@@ -20,7 +20,7 @@ def ensure_venv():
     os.chdir(REPO_PATH)  # Change to repo dir for installations and runs
 
     # Check if we're in the virtualenv
-    if os.path.normpath(sys.prefix) != os.path.normpath(VENV_PATH):
+    if os.path.normpath(sys.prefix) != os.path.normpath(os.path.abspath(VENV_PATH)):
         # Create venv if it doesn't exist
         if not os.path.exists(VENV_PYTHON):
             print("Creating virtualenv with system site packages...")
@@ -53,12 +53,12 @@ def ensure_checkpoints():
     s1_mini_dir = os.path.join('checkpoints', 'openaudio-s1-mini')
     if not os.path.exists(s1_mini_dir):
         print("Downloading OpenAudio S1 Mini checkpoints...")
-        subprocess.run(['huggingface-cli', 'download', 'fishaudio/openaudio-s1-mini', '--local-dir', s1_mini_dir], check=True)
-
-    vqgan_dir = os.path.join('checkpoints', 'fish-speech-vqgan')
-    if not os.path.exists(vqgan_dir):
-        print("Downloading Fish Speech VQGAN checkpoints...")
-        subprocess.run(['huggingface-cli', 'download', 'fishaudio/fish-speech-vqgan', '--local-dir', vqgan_dir], check=True)
+        try:
+            subprocess.run(['huggingface-cli', 'download', 'fishaudio/openaudio-s1-mini', '--local-dir', s1_mini_dir], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to download openaudio-s1-mini: {e}")
+            print("Please manually download the checkpoint from https://huggingface.co/fishaudio/openaudio-s1-mini")
+            sys.exit(1)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -69,8 +69,7 @@ logger.addHandler(handler)
 ensure_venv()
 ensure_checkpoints()
 
-# Now the test app code
-
+# Test app code
 def create_temp_dir():
     temp_dir = 'tts_temp'
     if os.path.exists(temp_dir):
@@ -83,17 +82,14 @@ def prepare_reference(ref_audio, ref_text, temp_dir='tts_temp'):
     ref_audio_temp = os.path.join(temp_dir, os.path.basename(ref_audio))
     shutil.copy(ref_audio, ref_audio_temp)
 
-    # For Fish Speech, the prompt text is used directly, no .lab needed
-
-    # Run vqgan to get prompt tokens from ref audio
-    vqgan_checkpoint = 'checkpoints/fish-speech-vqgan/group_1-vqgan.ckpt'
+    # Run VQGAN to get prompt tokens from ref audio
+    vqgan_checkpoint = 'checkpoints/openaudio-s1-mini/codec.pth'
     prompt_tokens = os.path.join(temp_dir, 'prompt_tokens.npy')
     subprocess.run([
-        VENV_PYTHON, '-m', 'tools.vqgan_infer',
-        '--mode', 'encode',
+        VENV_PYTHON, 'fish_speech/models/dac/inference.py',
+        '-i', ref_audio_temp,
         '--checkpoint-path', vqgan_checkpoint,
-        '--input-audio', ref_audio_temp,
-        '--output-tokens', prompt_tokens
+        '--output', prompt_tokens
     ], cwd=os.getcwd(), check=True)  # cwd is repo dir
 
     return prompt_tokens, ref_text
@@ -105,27 +101,27 @@ def text_to_semantic(text, prompt_text, prompt_tokens, temp_dir='tts_temp'):
     tokenizer_path = 'checkpoints/openaudio-s1-mini/tokenizer.json'
 
     subprocess.run([
-        VENV_PYTHON, '-m', 'tools.text2semantic_infer',
+        VENV_PYTHON, 'fish_speech/models/text2semantic/inference.py',
         '--text', text,
         '--prompt-text', prompt_text,
         '--prompt-tokens', prompt_tokens,
         '--checkpoint-path', s1_mini_checkpoint,
         '--config-path', config_path,
         '--tokenizer', tokenizer_path,
-        '--output-path', codes_file
+        '--output', codes_file,
+        '--compile'
     ], cwd=os.getcwd(), check=True)
 
     return codes_file
 
 def semantic_to_audio(codes_file, output_file, temp_dir='tts_temp'):
-    vqgan_checkpoint = 'checkpoints/fish-speech-vqgan/group_1-vqgan.ckpt'
+    vqgan_checkpoint = 'checkpoints/openaudio-s1-mini/codec.pth'
     generated_audio = os.path.join(temp_dir, 'fake.wav')
     subprocess.run([
-        VENV_PYTHON, '-m', 'tools.vqgan_infer',
-        '--mode', 'decode',
+        VENV_PYTHON, 'fish_speech/models/dac/inference.py',
+        '-i', codes_file,
         '--checkpoint-path', vqgan_checkpoint,
-        '--input-tokens', codes_file,
-        '--output-audio', generated_audio
+        '--output', generated_audio
     ], cwd=os.getcwd(), check=True)
 
     # Copy to output_file
@@ -133,7 +129,7 @@ def semantic_to_audio(codes_file, output_file, temp_dir='tts_temp'):
 
 if __name__ == '__main__':
     # Example usage
-    ref_audio = 'path/to/your/ref_audio.wav'  # Replace with your reference audio file path
+    ref_audio = 'voices/default.wav'  # Reference audio file
     ref_text = 'Your reference text here.'    # Replace with the exact transcript of the reference audio
     text = 'Hello, this is a test of OpenAudio S1 text-to-speech.'  # The text to convert to speech
     output_file = 'output.wav'                # Output audio file
