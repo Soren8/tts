@@ -81,9 +81,12 @@ def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_
     """
     Synthesize and return WAV bytes (RIFF) for the given inputs.
 
-    This implementation ensures we log key info from the synthesizer and write a
-    compatible PCM16 WAV into an in-memory buffer to avoid player/sample-rate/dtype
-    mismatches that can cause deep/slow playback.
+    Use the model-provided sample rate and write the audio into the BytesIO using
+    soundfile in the same manner kokoro does (write the float array with the
+    model sample rate). Avoid forcing an int16 conversion here because that
+    conversion can sometimes lead to playback speed/pitch issues depending on
+    how clients interpret the WAV header. Writing the float32 audio preserves
+    the original sample-rate/header pairing produced by the model.
     """
     tts = get_tts()
     sample_rate, audio_data = tts(
@@ -94,8 +97,8 @@ def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_
         chunk_length=chunk_length
     )
 
-    # Normalize and convert to a numpy float32 array
-    audio = np.asarray(audio_data)
+    # Ensure numpy array and float32 dtype (kokoro writes the raw float array)
+    audio = np.asarray(audio_data).astype('float32')
     try:
         channels = 1 if audio.ndim == 1 else audio.shape[1]
     except Exception:
@@ -106,17 +109,9 @@ def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_
         f"dtype={audio.dtype}, channels={channels}"
     )
 
-    # Convert integer arrays to float32 in [-1, 1], or ensure float32
-    if np.issubdtype(audio.dtype, np.integer):
-        max_val = np.iinfo(audio.dtype).max
-        audio = (audio.astype('float32') / float(max_val))
-    else:
-        audio = audio.astype('float32')
-
-    # Write a PCM16 WAV for maximum compatibility with players
+    # Write WAV using the model's sample rate and the float32 data (no forced PCM conversion)
     wav_io = io.BytesIO()
-    int16_audio = (np.clip(audio, -1.0, 1.0) * 32767.0).astype('int16')
-    sf.write(wav_io, int16_audio, int(sample_rate), format='WAV', subtype='PCM_16')
+    sf.write(wav_io, audio, int(sample_rate), format='WAV')
     wav_io.seek(0)
     return wav_io
 
