@@ -81,13 +81,12 @@ def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_
     """
     Synthesize and return WAV bytes (RIFF) for the given inputs.
 
-    Use the model-provided sample rate and write the audio into the BytesIO using
-    soundfile in the same manner kokoro does (write the float array with the
-    model sample rate). Avoid forcing an int16 conversion here because that
-    conversion can sometimes lead to playback speed/pitch issues depending on
-    how clients interpret the WAV header. Writing the float32 audio preserves
-    the original sample-rate/header pairing produced by the model.
+    We force the output WAV to 24000 Hz (24 kHz) to match kokoro's behavior.
+    If the model returns audio at a different sample rate, perform a simple
+    resampling using numpy interpolation to avoid adding heavy dependencies.
     """
+    TARGET_SR = 24000
+
     tts = get_tts()
     sample_rate, audio_data = tts(
         text=text,
@@ -97,7 +96,7 @@ def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_
         chunk_length=chunk_length
     )
 
-    # Ensure numpy array and float32 dtype (kokoro writes the raw float array)
+    # Ensure numpy array and float32 dtype
     audio = np.asarray(audio_data).astype('float32')
     try:
         channels = 1 if audio.ndim == 1 else audio.shape[1]
@@ -109,7 +108,39 @@ def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_
         f"dtype={audio.dtype}, channels={channels}"
     )
 
-    # Write WAV using the model's sample rate and the float32 data (no forced PCM conversion)
+    def _resample_audio(aud, orig_sr, target_sr):
+        if int(orig_sr) == int(target_sr):
+            return aud
+        # aud shape: (n_samples,) or (n_samples, channels)
+        n_samples = aud.shape[0]
+        new_len = int(round(n_samples * float(target_sr) / float(orig_sr)))
+        if new_len <= 0:
+            raise ValueError("Computed new length for resampling is <= 0")
+        # Create new sample positions
+        old_positions = np.linspace(0, n_samples - 1, num=n_samples)
+        new_positions = np.linspace(0, n_samples - 1, num=new_len)
+        if aud.ndim == 1:
+            return np.interp(new_positions, old_positions, aud).astype('float32')
+        else:
+            # Process each channel separately
+            channels = aud.shape[1]
+            resampled = np.zeros((new_len, channels), dtype='float32')
+            for ch in range(channels):
+                resampled[:, ch] = np.interp(new_positions, old_positions, aud[:, ch])
+            return resampled
+
+    # Resample if needed
+    if int(sample_rate) != TARGET_SR:
+        try:
+            logger.info(f"Resampling audio from {int(sample_rate)} Hz to {TARGET_SR} Hz")
+            audio = _resample_audio(audio, int(sample_rate), TARGET_SR)
+            sample_rate = TARGET_SR
+            logger.info(f"Resampling complete: new shape={audio.shape}, dtype={audio.dtype}")
+        except Exception as e:
+            logger.warning(f"Resampling failed: {e}. Proceeding with original audio and sample rate.")
+
+    # Ensure float32 and write WAV using the target sample rate
+    audio = audio.astype('float32')
     wav_io = io.BytesIO()
     sf.write(wav_io, audio, int(sample_rate), format='WAV')
     wav_io.seek(0)
