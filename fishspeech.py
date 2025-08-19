@@ -50,23 +50,200 @@ ensure_venv()
 
 from fish_speech_lib.inference import FishSpeech
 import soundfile as sf
+from flask import Flask, request, jsonify, send_file, Response
+import io
+import tempfile
+import traceback
+
+# Optional torch check for CUDA device; fall back to cpu if torch not available
+try:
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+except Exception:
+    device = "cpu"
+
+# Lazily initialized FishSpeech instance
+_tts_instance = None
 
 
-def text_to_speech(text, ref_audio, ref_text, output_file='output.wav', device='cuda', max_new_tokens=1000, chunk_length=1000):
-    tts = FishSpeech(device=device)
+def get_tts():
+    global _tts_instance
+    if _tts_instance is None:
+        logger.info(f"Initializing FishSpeech on device: {device}")
+        _tts_instance = FishSpeech(device=device)
+    return _tts_instance
+
+
+def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_length=1000):
+    """
+    Synthesize and return WAV bytes (RIFF) for the given inputs.
+    """
+    tts = get_tts()
     sample_rate, audio_data = tts(
         text=text,
-        reference_audio=ref_audio,
+        reference_audio=ref_audio_path,
         reference_audio_text=ref_text,
         max_new_tokens=max_new_tokens,
         chunk_length=chunk_length
     )
-    sf.write(output_file, audio_data, sample_rate, format='WAV')
-    logger.info(f"Audio generated at {output_file}")
+    wav_io = io.BytesIO()
+    # Use soundfile to write WAV into the BytesIO buffer
+    sf.write(wav_io, audio_data, sample_rate, format='WAV')
+    wav_io.seek(0)
+    return wav_io
+
+
+# Flask app
+app = Flask(__name__)
+
+
+@app.route('/api/tts', methods=['POST'])
+def http_tts():
+    """
+    POST JSON:
+      {
+        "text": "...",
+        "ref_text": "...",
+        "max_new_tokens": 1000,        # optional
+        "chunk_length": 1000           # optional
+      }
+    Or multipart/form-data with file field "ref_audio" (wav) and form fields above.
+    If a file is uploaded for ref_audio it will be used; otherwise a path string may be provided
+    in the "ref_audio_path" JSON/form field (path on disk accessible by the service).
+    """
+    logger.info(f"Received TTS request from {request.remote_addr}")
+    try:
+        # Accept both JSON and form-data
+        if request.is_json:
+            req = request.get_json()
+            text = req.get("text")
+            ref_text = req.get("ref_text")
+            ref_audio_path = req.get("ref_audio_path")
+            max_new_tokens = req.get("max_new_tokens", 1000)
+            chunk_length = req.get("chunk_length", 1000)
+            uploaded_file = None
+        else:
+            text = request.form.get("text")
+            ref_text = request.form.get("ref_text")
+            ref_audio_path = request.form.get("ref_audio_path")
+            max_new_tokens = int(request.form.get("max_new_tokens", 1000))
+            chunk_length = int(request.form.get("chunk_length", 1000))
+            uploaded_file = request.files.get("ref_audio")
+
+        if not text:
+            logger.error("No text provided in request")
+            return jsonify({"error": "Text is required"}), 400
+        if not ref_text:
+            logger.error("No ref_text provided in request")
+            return jsonify({"error": "ref_text is required"}), 400
+
+        temp_file_path = None
+        if uploaded_file:
+            # Save uploaded reference audio to a temporary file
+            tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            uploaded_file.save(tmpf.name)
+            temp_file_path = tmpf.name
+            ref_audio_to_use = temp_file_path
+        else:
+            if not ref_audio_path:
+                logger.error("No ref_audio provided (neither file upload nor ref_audio_path)")
+                return jsonify({"error": "Reference audio is required (upload or ref_audio_path)"}), 400
+            ref_audio_to_use = ref_audio_path
+
+        wav_io = synthesize_bytes(text, ref_audio_to_use, ref_text, max_new_tokens=max_new_tokens, chunk_length=chunk_length)
+
+        # Clean up temp file if created
+        if temp_file_path:
+            try:
+                os.remove(temp_file_path)
+            except Exception:
+                logger.warning(f"Could not remove temp file {temp_file_path}")
+
+        logger.info("Successfully generated audio")
+        return send_file(wav_io, mimetype='audio/wav', as_attachment=True, download_name='output.wav')
+
+    except Exception as e:
+        logger.error(f"Error generating audio: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/tts/stream', methods=['POST'])
+def http_tts_stream():
+    """
+    Streamed endpoint. For compatibility it will generate audio and stream the WAV bytes as a single chunk.
+    """
+    logger.info(f"Received streaming TTS request from {request.remote_addr}")
+    try:
+        if request.is_json:
+            req = request.get_json()
+            text = req.get("text")
+            ref_text = req.get("ref_text")
+            ref_audio_path = req.get("ref_audio_path")
+            max_new_tokens = req.get("max_new_tokens", 1000)
+            chunk_length = req.get("chunk_length", 1000)
+            uploaded_file = None
+        else:
+            text = request.form.get("text")
+            ref_text = request.form.get("ref_text")
+            ref_audio_path = request.form.get("ref_audio_path")
+            max_new_tokens = int(request.form.get("max_new_tokens", 1000))
+            chunk_length = int(request.form.get("chunk_length", 1000))
+            uploaded_file = request.files.get("ref_audio")
+
+        if not text:
+            logger.error("No text provided in request")
+            return jsonify({"error": "Text is required"}), 400
+        if not ref_text:
+            logger.error("No ref_text provided in request")
+            return jsonify({"error": "ref_text is required"}), 400
+
+        temp_file_path = None
+        if uploaded_file:
+            tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            uploaded_file.save(tmpf.name)
+            temp_file_path = tmpf.name
+            ref_audio_to_use = temp_file_path
+        else:
+            if not ref_audio_path:
+                logger.error("No ref_audio provided (neither file upload nor ref_audio_path)")
+                return jsonify({"error": "Reference audio is required (upload or ref_audio_path)"}), 400
+            ref_audio_to_use = ref_audio_path
+
+        def generate():
+            try:
+                wav_io = synthesize_bytes(text, ref_audio_to_use, ref_text, max_new_tokens=max_new_tokens, chunk_length=chunk_length)
+                data = wav_io.getvalue()
+                yield data
+                logger.info("Streamed audio (single chunk)")
+            except Exception as e:
+                logger.error(f"Error during streaming synthesis: {e}\n{traceback.format_exc()}")
+                return
+
+        # Clean up temp file if created (do it after generator created; generator runs synchronously here)
+        if temp_file_path:
+            try:
+                os.remove(temp_file_path)
+            except Exception:
+                logger.warning(f"Could not remove temp file {temp_file_path}")
+
+        return Response(generate(), mimetype='audio/wav')
+
+    except Exception as e:
+        logger.error(f"Error preparing streaming response: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/status', methods=['GET'])
+def status():
+    logger.info(f"Status check from {request.remote_addr}")
+    return jsonify({"status": "running", "device": device}), 200
+
 
 if __name__ == '__main__':
-    ref_audio = 'voices/default.wav'  # Reference audio file
-    ref_text = 'Your reference text here.'  # Replace with the exact transcript of the reference audio
-    text = 'Hello, this is a test of Fish Speech text-to-speech with voice cloning.'
+    # Create outputs directory for compatibility with other scripts / examples
+    os.makedirs('outputs', exist_ok=True)
 
-    text_to_speech(text, ref_audio, ref_text)
+    port = int(os.getenv('PORT', 5000))
+    logger.info(f"Starting FishSpeech HTTP service on port {port} (device={device})")
+    # Run Flask app
+    app.run(host='0.0.0.0', port=port)
