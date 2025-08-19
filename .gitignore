@@ -9,4 +9,7 @@ service.log
 __pycache__/*
 kokoro_env/*
 fishspeech_venv/*
+checkpoints/*
+.project-root
+
 
