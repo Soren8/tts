@@ -284,33 +284,39 @@ def http_tts_stream():
                 logger.error("No ref_audio provided and default reference audio './voices/default.wav' not found")
                 return jsonify({"error": "Reference audio is required (upload, ref_audio_path, or ./voices/default.wav)"}), 400
 
-        def generate():
-            try:
-                wav_io = synthesize_bytes(text, ref_audio_to_use, ref_text, max_new_tokens=max_new_tokens, chunk_length=chunk_length)
-                # Save a copy to ./outputs/output.wav for direct playback
-                try:
-                    os.makedirs('outputs', exist_ok=True)
-                    out_path = os.path.join('outputs', 'output.wav')
-                    with open(out_path, 'wb') as out_f:
-                        out_f.write(wav_io.getvalue())
-                    logger.info(f"Saved streamed-generated audio to {out_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to save streamed-generated audio to ./outputs/output.wav: {e}")
-                data = wav_io.getvalue()
-                yield data
-                logger.info("Streamed audio (single chunk)")
-            except Exception as e:
-                logger.error(f"Error during streaming synthesis: {e}\n{traceback.format_exc()}")
-                return
+        # Generate full WAV bytes synchronously and return them with explicit Content-Length.
+        # Returning the full bytes ensures clients receive a complete WAV file with a correct header
+        # and Content-Length which prevents some players from assuming an incorrect sample rate/format.
+        try:
+            wav_io = synthesize_bytes(text, ref_audio_to_use, ref_text, max_new_tokens=max_new_tokens, chunk_length=chunk_length)
 
-        # Clean up temp file if created (do it after generator created; generator runs synchronously here)
+            # Save a copy to ./outputs/output.wav for direct playback
+            try:
+                os.makedirs('outputs', exist_ok=True)
+                out_path = os.path.join('outputs', 'output.wav')
+                with open(out_path, 'wb') as out_f:
+                    out_f.write(wav_io.getvalue())
+                logger.info(f"Saved streamed-generated audio to {out_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save streamed-generated audio to ./outputs/output.wav: {e}")
+
+            data = wav_io.getvalue()
+            # Build a full response with Content-Length to avoid player/sample-rate misinterpretation.
+            resp = Response(data, mimetype='audio/wav')
+            resp.headers['Content-Length'] = str(len(data))
+            logger.info("Streamed audio (single chunk, returned as full response)")
+        except Exception as e:
+            logger.error(f"Error during streaming synthesis: {e}\n{traceback.format_exc()}")
+            return jsonify({"error": str(e)}), 500
+
+        # Clean up temp file if created (do it after generation)
         if temp_file_path:
             try:
                 os.remove(temp_file_path)
             except Exception:
                 logger.warning(f"Could not remove temp file {temp_file_path}")
 
-        return Response(generate(), mimetype='audio/wav')
+        return resp
 
     except Exception as e:
         logger.error(f"Error preparing streaming response: {e}\n{traceback.format_exc()}")
