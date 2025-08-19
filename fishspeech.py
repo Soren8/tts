@@ -142,17 +142,24 @@ def http_tts():
             ref_text = ""
 
         temp_file_path = None
+        default_ref_audio = os.path.join(os.getcwd(), 'voices', 'default.wav')
         if uploaded_file:
             # Save uploaded reference audio to a temporary file
             tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             uploaded_file.save(tmpf.name)
             temp_file_path = tmpf.name
             ref_audio_to_use = temp_file_path
-        else:
-            if not ref_audio_path:
-                logger.error("No ref_audio provided (neither file upload nor ref_audio_path)")
-                return jsonify({"error": "Reference audio is required (upload or ref_audio_path)"}), 400
+        elif ref_audio_path:
+            # Use provided path on disk
             ref_audio_to_use = ref_audio_path
+        else:
+            # No uploaded file and no path provided -> use default reference audio if available
+            if os.path.exists(default_ref_audio):
+                ref_audio_to_use = default_ref_audio
+                logger.warning(f"No ref_audio provided; using default reference audio at {default_ref_audio}")
+            else:
+                logger.error("No ref_audio provided and default reference audio './voices/default.wav' not found")
+                return jsonify({"error": "Reference audio is required (upload, ref_audio_path, or ./voices/default.wav)"}), 400
 
         wav_io = synthesize_bytes(text, ref_audio_to_use, ref_text, max_new_tokens=max_new_tokens, chunk_length=chunk_length)
 
@@ -203,16 +210,22 @@ def http_tts_stream():
             ref_text = ""
 
         temp_file_path = None
+        default_ref_audio = os.path.join(os.getcwd(), 'voices', 'default.wav')
         if uploaded_file:
             tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             uploaded_file.save(tmpf.name)
             temp_file_path = tmpf.name
             ref_audio_to_use = temp_file_path
-        else:
-            if not ref_audio_path:
-                logger.error("No ref_audio provided (neither file upload nor ref_audio_path)")
-                return jsonify({"error": "Reference audio is required (upload or ref_audio_path)"}), 400
+        elif ref_audio_path:
             ref_audio_to_use = ref_audio_path
+        else:
+            # No uploaded file and no path provided -> use default reference audio if available
+            if os.path.exists(default_ref_audio):
+                ref_audio_to_use = default_ref_audio
+                logger.warning(f"No ref_audio provided; using default reference audio at {default_ref_audio}")
+            else:
+                logger.error("No ref_audio provided and default reference audio './voices/default.wav' not found")
+                return jsonify({"error": "Reference audio is required (upload, ref_audio_path, or ./voices/default.wav)"}), 400
 
         def generate():
             try:
