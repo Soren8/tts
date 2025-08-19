@@ -135,9 +135,11 @@ def http_tts():
         if not text:
             logger.error("No text provided in request")
             return jsonify({"error": "Text is required"}), 400
+        # ref_text is optional; proceed with an empty string if not provided so the service can
+        # still synthesize using the reference audio alone (if supported by the model).
         if not ref_text:
-            logger.error("No ref_text provided in request")
-            return jsonify({"error": "ref_text is required"}), 400
+            logger.warning("No ref_text provided in request; proceeding with empty ref_text. Provide ref_text for better voice cloning quality.")
+            ref_text = ""
 
         temp_file_path = None
         if uploaded_file:
@@ -195,9 +197,10 @@ def http_tts_stream():
         if not text:
             logger.error("No text provided in request")
             return jsonify({"error": "Text is required"}), 400
+        # ref_text is optional for streaming as well; use empty string when absent.
         if not ref_text:
-            logger.error("No ref_text provided in request")
-            return jsonify({"error": "ref_text is required"}), 400
+            logger.warning("No ref_text provided in request; proceeding with empty ref_text for streaming. Provide ref_text for better voice cloning quality.")
+            ref_text = ""
 
         temp_file_path = None
         if uploaded_file:
