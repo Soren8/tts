@@ -54,6 +54,7 @@ from fish_speech_lib.inference import FishSpeech
 import soundfile as sf
 from flask import Flask, request, jsonify, send_file, Response
 import io
+import numpy as np
 import tempfile
 import traceback
 
@@ -79,6 +80,10 @@ def get_tts():
 def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_length=1000):
     """
     Synthesize and return WAV bytes (RIFF) for the given inputs.
+
+    This implementation ensures we log key info from the synthesizer and write a
+    compatible PCM16 WAV into an in-memory buffer to avoid player/sample-rate/dtype
+    mismatches that can cause deep/slow playback.
     """
     tts = get_tts()
     sample_rate, audio_data = tts(
@@ -88,9 +93,30 @@ def synthesize_bytes(text, ref_audio_path, ref_text, max_new_tokens=1000, chunk_
         max_new_tokens=max_new_tokens,
         chunk_length=chunk_length
     )
+
+    # Normalize and convert to a numpy float32 array
+    audio = np.asarray(audio_data)
+    try:
+        channels = 1 if audio.ndim == 1 else audio.shape[1]
+    except Exception:
+        channels = None
+
+    logger.info(
+        f"Synthesized audio: sample_rate={int(sample_rate)}, shape={audio.shape}, "
+        f"dtype={audio.dtype}, channels={channels}"
+    )
+
+    # Convert integer arrays to float32 in [-1, 1], or ensure float32
+    if np.issubdtype(audio.dtype, np.integer):
+        max_val = np.iinfo(audio.dtype).max
+        audio = (audio.astype('float32') / float(max_val))
+    else:
+        audio = audio.astype('float32')
+
+    # Write a PCM16 WAV for maximum compatibility with players
     wav_io = io.BytesIO()
-    # Use soundfile to write WAV into the BytesIO buffer
-    sf.write(wav_io, audio_data, sample_rate, format='WAV')
+    int16_audio = (np.clip(audio, -1.0, 1.0) * 32767.0).astype('int16')
+    sf.write(wav_io, int16_audio, int(sample_rate), format='WAV', subtype='PCM_16')
     wav_io.seek(0)
     return wav_io
 
@@ -150,8 +176,17 @@ def http_tts():
             temp_file_path = tmpf.name
             ref_audio_to_use = temp_file_path
         elif ref_audio_path:
-            # Use provided path on disk
-            ref_audio_to_use = ref_audio_path
+            # Use provided path on disk if it exists, otherwise fall back to default
+            if os.path.exists(ref_audio_path):
+                ref_audio_to_use = ref_audio_path
+            else:
+                logger.warning(f"Provided ref_audio_path {ref_audio_path} does not exist; attempting to use default reference audio.")
+                if os.path.exists(default_ref_audio):
+                    ref_audio_to_use = default_ref_audio
+                    logger.warning(f"Using default reference audio at {default_ref_audio}")
+                else:
+                    logger.error(f"Provided ref_audio_path {ref_audio_path} not found and default reference audio './voices/default.wav' not found")
+                    return jsonify({"error": "Reference audio not found (ref_audio_path invalid and ./voices/default.wav missing)"}), 400
         else:
             # No uploaded file and no path provided -> use default reference audio if available
             if os.path.exists(default_ref_audio):
@@ -217,7 +252,17 @@ def http_tts_stream():
             temp_file_path = tmpf.name
             ref_audio_to_use = temp_file_path
         elif ref_audio_path:
-            ref_audio_to_use = ref_audio_path
+            # Use provided path on disk if it exists, otherwise fall back to default
+            if os.path.exists(ref_audio_path):
+                ref_audio_to_use = ref_audio_path
+            else:
+                logger.warning(f"Provided ref_audio_path {ref_audio_path} does not exist; attempting to use default reference audio.")
+                if os.path.exists(default_ref_audio):
+                    ref_audio_to_use = default_ref_audio
+                    logger.warning(f"Using default reference audio at {default_ref_audio}")
+                else:
+                    logger.error(f"Provided ref_audio_path {ref_audio_path} not found and default reference audio './voices/default.wav' not found")
+                    return jsonify({"error": "Reference audio not found (ref_audio_path invalid and ./voices/default.wav missing)"}), 400
         else:
             # No uploaded file and no path provided -> use default reference audio if available
             if os.path.exists(default_ref_audio):
