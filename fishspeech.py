@@ -25,13 +25,15 @@ def ensure_venv():
         subprocess.run(cmd, shell=True)
         sys.exit()
 
-    # Install fish-speech-lib and soundfile if not present
+    # Install required packages if not present (including Flask for the HTTP service)
     try:
         import fish_speech_lib
         import soundfile
+        import flask
     except ImportError:
-        print("Installing fish-speech-lib, soundfile, and torchaudio...")
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'fish-speech-lib', 'soundfile', 'torchaudio'], check=True)
+        print("Installing required Python packages (fish-speech-lib, soundfile, torchaudio, flask, flask-cors)...")
+        packages = ['fish-speech-lib', 'soundfile', 'torchaudio', 'flask', 'flask-cors']
+        subprocess.run([sys.executable, '-m', 'pip', 'install'] + packages, check=True)
 
 # Set up logging
 logger = logging.getLogger(__name__)
