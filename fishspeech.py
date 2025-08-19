@@ -198,6 +198,16 @@ def http_tts():
 
         wav_io = synthesize_bytes(text, ref_audio_to_use, ref_text, max_new_tokens=max_new_tokens, chunk_length=chunk_length)
 
+        # Save a copy to ./outputs/output.wav for direct playback, then clean up temp file if created
+        try:
+            os.makedirs('outputs', exist_ok=True)
+            out_path = os.path.join('outputs', 'output.wav')
+            with open(out_path, 'wb') as out_f:
+                out_f.write(wav_io.getvalue())
+            logger.info(f"Saved generated audio to {out_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save generated audio to ./outputs/output.wav: {e}")
+
         # Clean up temp file if created
         if temp_file_path:
             try:
@@ -206,6 +216,8 @@ def http_tts():
                 logger.warning(f"Could not remove temp file {temp_file_path}")
 
         logger.info("Successfully generated audio")
+        # Rewind buffer before sending
+        wav_io.seek(0)
         return send_file(wav_io, mimetype='audio/wav', as_attachment=True, download_name='output.wav')
 
     except Exception as e:
@@ -275,6 +287,15 @@ def http_tts_stream():
         def generate():
             try:
                 wav_io = synthesize_bytes(text, ref_audio_to_use, ref_text, max_new_tokens=max_new_tokens, chunk_length=chunk_length)
+                # Save a copy to ./outputs/output.wav for direct playback
+                try:
+                    os.makedirs('outputs', exist_ok=True)
+                    out_path = os.path.join('outputs', 'output.wav')
+                    with open(out_path, 'wb') as out_f:
+                        out_f.write(wav_io.getvalue())
+                    logger.info(f"Saved streamed-generated audio to {out_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to save streamed-generated audio to ./outputs/output.wav: {e}")
                 data = wav_io.getvalue()
                 yield data
                 logger.info("Streamed audio (single chunk)")
