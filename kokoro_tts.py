@@ -7,8 +7,15 @@ import io
 
 # Path to your virtualenv (using 'kokoro_env' name)
 VENV_PATH = os.path.join(os.path.dirname(__file__), 'kokoro_env')
-VENV_ACTIVATE = os.path.join(VENV_PATH, 'Scripts', 'activate.bat')
-VENV_PYTHON = os.path.join(VENV_PATH, 'Scripts', 'python.exe')
+
+# Determine venv python path per-OS (no shell activation required)
+if os.name == 'nt':
+    _venv_bin = os.path.join(VENV_PATH, 'Scripts')
+    VENV_PYTHON = os.path.join(_venv_bin, 'python.exe')
+else:
+    _venv_bin = os.path.join(VENV_PATH, 'bin')
+    # Prefer 'python' inside venv; it's always present
+    VENV_PYTHON = os.path.join(_venv_bin, 'python')
 
 def ensure_venv():
     # Check if we're in the virtualenv
@@ -17,9 +24,9 @@ def ensure_venv():
         if not os.path.exists(VENV_PYTHON):
             print("Creating virtualenv with system packages...")
             subprocess.run([sys.executable, '-m', 'venv', VENV_PATH, '--system-site-packages'], check=True)
-        # Re-run the script in the virtualenv
-        print("Activating virtualenv and rerunning...")
-        subprocess.run(f'"{VENV_ACTIVATE}" && "{VENV_PYTHON}" "{__file__}" {" ".join(sys.argv[1:])}', shell=True)
+        # Re-run the script using the venv's Python directly (cross-platform)
+        print("Re-running with virtualenv Python...")
+        subprocess.run([VENV_PYTHON, __file__, *sys.argv[1:]], check=True)
         sys.exit()
     # List of required packages with versions where needed
     requirements = [
