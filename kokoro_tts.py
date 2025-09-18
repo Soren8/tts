@@ -4,6 +4,8 @@ import subprocess
 import logging
 from logging.handlers import RotatingFileHandler
 import io
+import shutil
+import textwrap
 
 # Path to your virtualenv (using 'kokoro_env' name)
 VENV_PATH = os.path.join(os.path.dirname(__file__), 'kokoro_env')
@@ -17,13 +19,126 @@ else:
     # Prefer 'python' inside venv; it's always present
     VENV_PYTHON = os.path.join(_venv_bin, 'python')
 
+SUPPORTED_PYTHON_VERSIONS = ((3, 11),)
+
+
+def _python_version_tuple(python_cmd):
+    command = list(python_cmd) if isinstance(python_cmd, (list, tuple)) else [python_cmd]
+    result = subprocess.check_output(
+        command + ['-c', 'import sys; print("%d.%d" % sys.version_info[:2])'],
+        text=True
+    ).strip()
+    major, minor = result.split('.')
+    return int(major), int(minor)
+
+
+def _normalize_python_spec(spec):
+    if isinstance(spec, (list, tuple)):
+        parts = list(spec)
+    elif isinstance(spec, str):
+        # Treat strings containing path separators as explicit paths (allow spaces)
+        if any(sep in spec for sep in (os.sep, os.altsep) if sep):
+            if os.path.exists(spec):
+                return [spec]
+            return None
+        parts = spec.split()
+    else:
+        return None
+
+    if not parts:
+        return None
+
+    resolved = parts[:]
+    first = resolved[0]
+    # Resolve commands available on PATH
+    if os.path.basename(first) == first:
+        located = shutil.which(first)
+        if not located:
+            return None
+        resolved[0] = located
+    else:
+        if not os.path.exists(first):
+            return None
+    return resolved
+
+
+def _resolve_bootstrap_python():
+    """Locate a Python interpreter with a supported version for the venv."""
+    env_override = os.environ.get('KOKORO_PYTHON')
+    candidates = []
+    if env_override:
+        candidates.append(env_override)
+    if sys.version_info[:2] in SUPPORTED_PYTHON_VERSIONS:
+        candidates.append(sys.executable)
+    candidates.append('python3.11')
+    if os.name == 'nt':
+        candidates.append('py -3.11')
+    pyenv_root = os.environ.get('PYENV_ROOT', os.path.expanduser('~/.pyenv'))
+    pyenv_versions = os.path.join(pyenv_root, 'versions')
+    if os.path.isdir(pyenv_versions):
+        for entry in sorted(os.listdir(pyenv_versions)):
+            candidate_path = os.path.join(pyenv_versions, entry, 'bin', 'python3.11')
+            candidates.append(candidate_path)
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        command = _normalize_python_spec(candidate)
+        if not command:
+            continue
+        try:
+            major, minor = _python_version_tuple(command)
+        except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+            continue
+        if (major, minor) in SUPPORTED_PYTHON_VERSIONS:
+            return command
+
+    supported = ', '.join(f"{maj}.{min_}" for maj, min_ in SUPPORTED_PYTHON_VERSIONS)
+    instructions = textwrap.dedent(
+        f"""
+        Python {supported} is required but was not found on this machine.
+
+        Install Python 3.11 (pyenv recommended):
+          git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+          export PYENV_ROOT="$HOME/.pyenv"
+          command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+          eval "$(pyenv init -)"
+          pyenv install 3.11.11
+
+        After installing, make sure your system-level Python 3.11 has the CUDA-aware
+        packages you need (e.g. torch with your CUDA wheel) so they can be shared.
+        This launcher will reuse that Python 3.11 interpreter inside the kokoro_env
+        virtualenv, borrowing the CUDA stack from the system install and installing
+        all remaining packages in the venv.
+
+        If Python 3.11 lives at a custom path, set KOKORO_PYTHON to that interpreter
+        before starting this script.
+        """
+    ).strip()
+    raise RuntimeError(instructions)
+
 def ensure_venv():
+    bootstrap_cmd = _resolve_bootstrap_python()
+
+    def venv_python_supported():
+        if not os.path.exists(VENV_PYTHON):
+            return False
+        try:
+            major, minor = _python_version_tuple(VENV_PYTHON)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+        return (major, minor) in SUPPORTED_PYTHON_VERSIONS
+
     # Check if we're in the virtualenv
     if os.path.normpath(sys.prefix) != os.path.normpath(VENV_PATH):
-        # Create venv if it doesn't exist
-        if not os.path.exists(VENV_PYTHON):
+        # Create or rebuild the venv if needed
+        if not venv_python_supported():
+            if os.path.exists(VENV_PATH):
+                print("Recreating virtualenv to use a supported Python version...")
+                shutil.rmtree(VENV_PATH)
+            logger.info("Reusing system Python 3.11 interpreter at %s for kokoro_env", bootstrap_cmd[0])
             print("Creating virtualenv with system packages...")
-            subprocess.run([sys.executable, '-m', 'venv', VENV_PATH, '--system-site-packages'], check=True)
+            subprocess.run(bootstrap_cmd + ['-m', 'venv', VENV_PATH, '--system-site-packages'], check=True)
         # Re-run the script using the venv's Python directly (cross-platform)
         print("Re-running with virtualenv Python...")
         subprocess.run([VENV_PYTHON, __file__, *sys.argv[1:]], check=True)
@@ -95,11 +210,17 @@ app = Flask(__name__)
 # Global pipeline instance
 pipeline = None
 
+
 def get_pipeline():
     global pipeline
     if pipeline is None:
+        logger.info("Initializing Kokoro pipeline and downloading model weights if needed")
         pipeline = KPipeline(lang_code='a', device=device)  # American English, use detected device
     return pipeline
+
+
+# Warm the pipeline during startup so required assets download before handling traffic
+get_pipeline()
 
 @app.route('/api/tts', methods=['POST'])
 def text_to_speech():
