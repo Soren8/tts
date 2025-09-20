@@ -7,17 +7,12 @@ import io
 import shutil
 import textwrap
 
-# Path to your virtualenv (using 'kokoro_env' name)
-VENV_PATH = os.path.join(os.path.dirname(__file__), 'kokoro_env')
-
-# Determine venv python path per-OS (no shell activation required)
-if os.name == 'nt':
-    _venv_bin = os.path.join(VENV_PATH, 'Scripts')
-    VENV_PYTHON = os.path.join(_venv_bin, 'python.exe')
-else:
-    _venv_bin = os.path.join(VENV_PATH, 'bin')
-    # Prefer 'python' inside venv; it's always present
-    VENV_PYTHON = os.path.join(_venv_bin, 'python')
+# NOTE: This launcher prefers to run inside a Conda environment. If a suitable
+# Conda env (name controlled by `KOKORO_CONDA_ENV`, default `kokoro`) exists
+# it will be activated. If it does not exist the script will create it and
+# re-exec inside that env. The script will avoid using the system Python
+# unless the user explicitly requests it with the `--use-system-python`
+# command-line flag or `KOKORO_ALLOW_SYSTEM_PYTHON=1` environment variable.
 
 SUPPORTED_PYTHON_VERSIONS = ((3, 11),)
 
@@ -63,7 +58,7 @@ def _normalize_python_spec(spec):
 
 
 def _resolve_bootstrap_python():
-    """Locate a Python interpreter with a supported version for the venv."""
+    """Locate a Python interpreter with a supported version for running the service."""
     env_override = os.environ.get('KOKORO_PYTHON')
     candidates = []
     if env_override:
@@ -105,11 +100,10 @@ def _resolve_bootstrap_python():
           eval "$(pyenv init -)"
           pyenv install 3.11.11
 
-        After installing, make sure your system-level Python 3.11 has the CUDA-aware
-        packages you need (e.g. torch with your CUDA wheel) so they can be shared.
-        This launcher will reuse that Python 3.11 interpreter inside the kokoro_env
-        virtualenv, borrowing the CUDA stack from the system install and installing
-        all remaining packages in the venv.
+        After installing, make sure your Python 3.11 has the CUDA-aware packages
+        you need (e.g. a compatible torch). This launcher will reuse that
+        interpreter (or a Conda environment) to run the service and will install
+        any missing Python packages into the active interpreter.
 
         If Python 3.11 lives at a custom path, set KOKORO_PYTHON to that interpreter
         before starting this script.
@@ -117,32 +111,119 @@ def _resolve_bootstrap_python():
     ).strip()
     raise RuntimeError(instructions)
 
-def ensure_venv():
-    bootstrap_cmd = _resolve_bootstrap_python()
+def ensure_environment():
+    """Ensure we're running inside a supported interpreter, preferring Conda.
 
-    def venv_python_supported():
-        if not os.path.exists(VENV_PYTHON):
-            return False
+    Behavior:
+      - If `--use-system-python` is passed or `KOKORO_ALLOW_SYSTEM_PYTHON=1`
+        the script may use the current system interpreter (subject to version
+        checks and `KOKORO_PYTHON`).
+      - Otherwise the script will attempt to find `conda`, activate an env
+        named by `KOKORO_CONDA_ENV` (default `kokoro`), create it if missing,
+        and re-exec inside that env. If `conda` is not available it falls back
+        to locating a suitable Python via `_resolve_bootstrap_python`.
+    """
+    allow_system = ('--use-system-python' in sys.argv) or (os.environ.get('KOKORO_ALLOW_SYSTEM_PYTHON') == '1')
+    conda_env_name = os.environ.get('KOKORO_CONDA_ENV', 'kokoro')
+
+    # Defer resolving a bootstrap python until after attempting Conda-based
+    # activation/creation. `_resolve_bootstrap_python` may raise if no
+    # suitable interpreter exists; we only want to call it as a fallback.
+    bootstrap_cmd = None
+
+    def _is_conda_python(python_cmd):
+        """Return True if the given python interpreter belongs to a Conda env."""
+        command = list(python_cmd) if isinstance(python_cmd, (list, tuple)) else [python_cmd]
         try:
-            major, minor = _python_version_tuple(VENV_PYTHON)
+            result = subprocess.check_output(
+                command + ['-c', 'import sys, os; print(os.path.isdir(os.path.join(sys.prefix, "conda-meta")))'],
+                text=True
+            ).strip()
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
-        return (major, minor) in SUPPORTED_PYTHON_VERSIONS
+        return result.lower() in ('1', 'true', 'yes')
 
-    # Check if we're in the virtualenv
-    if os.path.normpath(sys.prefix) != os.path.normpath(VENV_PATH):
-        # Create or rebuild the venv if needed
-        if not venv_python_supported():
-            if os.path.exists(VENV_PATH):
-                print("Recreating virtualenv to use a supported Python version...")
-                shutil.rmtree(VENV_PATH)
-            logger.info("Reusing system Python 3.11 interpreter at %s for kokoro_env", bootstrap_cmd[0])
-            print("Creating virtualenv with system packages...")
-            subprocess.run(bootstrap_cmd + ['-m', 'venv', VENV_PATH, '--system-site-packages'], check=True)
-        # Re-run the script using the venv's Python directly (cross-platform)
-        print("Re-running with virtualenv Python...")
-        subprocess.run([VENV_PYTHON, __file__, *sys.argv[1:]], check=True)
-        sys.exit()
+    # Determine whether we're already executing in a target environment where
+    # we can proceed to install missing Python packages. We avoid returning
+    # early so package installation runs even if we're already inside Conda
+    # or using the system interpreter (when allowed).
+    executing_in_target_env = False
+    if sys.version_info[:2] in SUPPORTED_PYTHON_VERSIONS:
+        if _is_conda_python(sys.executable):
+            logger.info("Running inside Conda environment at %s", sys.prefix)
+            executing_in_target_env = True
+        elif allow_system:
+            logger.info("Using non-Conda supported Python %s.%s as requested", *sys.version_info[:2])
+            executing_in_target_env = True
+
+    # If we're not already in a suitable environment, prefer using conda if
+    # available to create/activate one and re-exec inside it.
+    # Otherwise we'll fall back to locating a suitable Python interpreter.
+    if not executing_in_target_env:
+        conda_cmd = shutil.which('conda')
+        if (conda_cmd is not None) and (not allow_system):
+            try:
+                # Check existing envs via `conda env list --json`
+                out = subprocess.check_output([conda_cmd, 'env', 'list', '--json'], text=True)
+                import json
+                envs = json.loads(out).get('envs', [])
+                target_prefix = None
+                for p in envs:
+                    if os.path.basename(p) == conda_env_name or p.rstrip(os.path.sep).endswith(os.path.sep + conda_env_name):
+                        target_prefix = p
+                        break
+
+                if target_prefix:
+                    print(f"Activating existing Conda environment '{conda_env_name}'...", flush=True)
+                    # Use `--no-capture-output` so the child process stdout/stderr are
+                    # forwarded to the terminal (important for long-running installs).
+                    subprocess.run([conda_cmd, 'run', '--no-capture-output', '-n', conda_env_name, 'python', __file__, *sys.argv[1:]], check=True)
+                    sys.exit()
+                else:
+                    print(f"Creating Conda environment '{conda_env_name}' with Python 3.11...", flush=True)
+                    subprocess.run([conda_cmd, 'create', '-n', conda_env_name, 'python=3.11', '-y'], check=True)
+                    print("Re-running inside newly created Conda environment...", flush=True)
+                    subprocess.run([conda_cmd, 'run', '--no-capture-output', '-n', conda_env_name, 'python', __file__, *sys.argv[1:]], check=True)
+                    sys.exit()
+            except subprocess.CalledProcessError:
+                logger.warning("Conda command failed; falling back to other resolution methods")
+
+        # If conda is not available (or user allowed system Python), fall back to
+        # the previous bootstrap behaviour: locate a compatible Python and re-exec.
+        try:
+            if bootstrap_cmd is None:
+                bootstrap_cmd = _resolve_bootstrap_python()
+        except RuntimeError:
+            # No suitable bootstrap python found; surface the helpful error
+            # instructions from `_resolve_bootstrap_python`.
+            raise
+
+        if bootstrap_cmd:
+            # If the bootstrap candidate is the current interpreter, and allowed,
+            # continue; otherwise re-exec under the bootstrap interpreter.
+            if isinstance(bootstrap_cmd, (list, tuple)):
+                bootstrap_exe = bootstrap_cmd[0]
+            else:
+                bootstrap_exe = bootstrap_cmd
+
+            try:
+                # If bootstrap_exe is the same as current exe and system allowed, continue
+                if os.path.abspath(str(bootstrap_exe)) == os.path.abspath(sys.executable) or allow_system:
+                    logger.info("Using current interpreter %s", sys.executable)
+                    executing_in_target_env = True
+                else:
+                    print("Re-running with supported Python interpreter...", flush=True)
+                    subprocess.run(list(bootstrap_cmd) + [__file__, *sys.argv[1:]], check=True)
+                    sys.exit()
+            except Exception:
+                # Best-effort fallback: if we can't re-exec, raise
+                raise
+        else:
+            raise RuntimeError("No suitable Python interpreter available.")
+
+    # At this point we should be running inside a supported interpreter (Conda
+    # env or allowed system interpreter). Proceed to ensure required packages
+    # are installed into the active interpreter.
     # List of required packages with versions where needed
     requirements = [
         'torch==2.8.0+cu128',
@@ -159,7 +240,7 @@ def ensure_venv():
         try:
             __import__(pkg.split('==')[0].split('[')[0])  # Check if importable
         except ImportError as e:
-            print(f"Installing {pkg}...")
+            print(f"Installing {pkg}...", flush=True)
             cmd = [sys.executable, '-m', 'pip', 'install', pkg]
             if pkg.startswith('torch=='):
                 cmd.extend(['--index-url', CUDA_INDEX_URL])
@@ -188,8 +269,8 @@ except PermissionError:
     logger.addHandler(file_handler)
     logger.warning(f"Could not write to {log_file}, using fallback log file: {fallback_log}")
 
-# Ensure virtualenv is active
-ensure_venv()
+# Ensure a supported Python interpreter / Conda environment is active
+ensure_environment()
 
 # Original script imports (now safe after installs)
 import numpy as np
