@@ -1,3 +1,20 @@
+# /// script
+# dependencies = [
+#   "flask",
+#   "flask-cors",
+#   "numpy<2.0.0",
+#   "coqui-tts==0.22.0",
+#   "torch",
+#   "python-dotenv",
+# ]
+# [[tool.uv.index]]
+# name = "pytorch-cu128"
+# url = "https://download.pytorch.org/whl/cu128"
+# explicit = true
+# [tool.uv.sources]
+# torch = { index = "pytorch-cu128" }
+# ///
+
 import torch
 from TTS.api import TTS
 from TTS.utils.manage import ModelManager

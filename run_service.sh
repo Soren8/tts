@@ -1,33 +1,22 @@
 #!/bin/bash
 
-echo "Starting TTS Service Setup..."
-
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "Python3 is not installed"
+# Ensure uv is installed
+if ! command -v uv &> /dev/null; then
+    echo "uv is not installed. Please install it first: https://docs.astral.sh/uv/getting-started/installation/"
     exit 1
 fi
 
-# Check if venv exists, create if it doesn't
-if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv venv
+# Get the service to run from argument, default to kokoro_tts.py
+SERVICE_SCRIPT=${1:-kokoro_tts.py}
+
+if [ ! -f "$SERVICE_SCRIPT" ]; then
+    echo "Error: Service script '$SERVICE_SCRIPT' not found."
+    echo "Usage: ./run_service.sh [script_name.py]"
+    exit 1
 fi
 
-# Activate virtual environment
-source venv/bin/activate
+echo "Starting TTS service: $SERVICE_SCRIPT using uv..."
 
-# Upgrade pip
-echo "Upgrading pip..."
-python -m pip install --upgrade pip
+export UV_HTTP_TIMEOUT=600
 
-# Install requirements
-echo "Installing requirements..."
-pip install -r requirements.txt
-
-# Run the service
-echo "Starting TTS service..."
-python kokoro_tts.py
-
-# Deactivate venv (this line won't be reached while service is running)
-deactivate
+uv run "$SERVICE_SCRIPT"
